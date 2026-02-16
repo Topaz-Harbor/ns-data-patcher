@@ -152,6 +152,28 @@ Load/save updates are grouped and applied in `reduce()` once per record to avoid
 - Confirm `Enable Create/Delete Actions` is checked on deployment.
 - Confirm `action` column values are exactly `create` or `delete`.
 
+## FAQ
+
+### Why did my Dry Run generate so many logs?
+- Dry Run writes a preview log for each row.
+- For large datasets, set `Max Rows` to a small number (for example `10`) while validating.
+
+### Why did Stop On Error still allow some records to change?
+- Stop On Error works as fast as it can, but some records may already be in progress.
+- This is expected in parallel processing.
+
+### Why are my sublist updates being skipped?
+- Sublist updates require both `sublistid` and `lineuniquekey`.
+- `linefield_` columns without a matching line key cannot be applied.
+
+### When should I use Force Load + Save Mode?
+- Use Inline Edit by default.
+- Turn on Force Load + Save only if Inline Edit does not work for your case.
+
+### Why were create/delete rows ignored?
+- `Enable Create/Delete Actions` must be checked.
+- Your query must return `action` with value `create` or `delete`.
+
 ## Governance Notes
 
 - Inline Edit (`record.submitFields`) updates body fields only.
