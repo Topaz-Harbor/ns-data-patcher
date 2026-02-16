@@ -18,26 +18,44 @@ This is the SDF project root (contains `suitecloud.config.js` and `src/`).
 
 ## Steps
 
-1. Validate project structure.
+1. Clone the repository.
+
+```bash
+git clone https://github.com/Topaz-Harbor/ns-data-patcher.git
+```
+
+2. Move into the repository root.
+
+```bash
+cd ns-data-patcher
+```
+
+3. Move into the SDF project root.
+
+```bash
+cd "Data Patcher"
+```
+
+4. Validate project structure.
 
 ```bash
 suitecloud project:validate
 ```
 
-2. Deploy project.
+5. Deploy project.
 
 ```bash
 suitecloud project:deploy
 ```
 
-3. Confirm deployed objects.
+6. Confirm deployed objects.
 
 - Script record:
   - `customscript_th_data_patcher`
 - Deployment:
   - `customdeploy_th_data_patcher_default`
 
-4. Create additional deployments for each job.
+7. Create additional deployments for each job.
 
 - One deployment per use case/query.
 - Keep run schedules separate.
