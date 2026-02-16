@@ -15,6 +15,7 @@ This utility is part of the **Topaz Harbor Admin Utilities** lineup.
 - Optionally deletes records from query rows.
 - Uses Inline Edit (`record.submitFields`) for body updates when possible.
 - Automatically uses load/save for sublist updates.
+- Groups load/save updates by record in `reduce()` to minimize repeated loads/saves.
 
 ## Core Paradigm
 
@@ -36,6 +37,10 @@ For sublist updates (`linefield_` aliases), include:
 
 - `sublistid`
 - one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
+
+Optional ordering column for grouped record updates:
+
+- `operationsequence` (number): lower values are applied first within a record group
 
 ## Admin-Friendly Scheduling Model
 

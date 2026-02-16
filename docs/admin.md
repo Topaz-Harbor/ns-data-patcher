@@ -36,6 +36,7 @@ Your SuiteQL must return these columns:
   - `update` (default if omitted)
   - `create` (requires non-update actions enabled)
   - `delete` (requires non-update actions enabled)
+- optional `operationsequence` (number) for deterministic apply order when multiple rows target the same record load/save group
 
 Example:
 
@@ -80,6 +81,7 @@ Use default Inline Edit mode (`record.submitFields`) when possible because it is
 Use `Force Load + Save` only when update behavior requires full load/save semantics or when Inline Edit fails for unexplained edge-case behavior.
 
 Create/delete actions ignore Inline Edit mode and run through record create/delete APIs.
+Load/save updates are grouped and applied in `reduce()` once per record to avoid repeated load/save cycles.
 
 ## Troubleshooting
 

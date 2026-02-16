@@ -218,66 +218,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     });
   };
 
-  const applyByLoadSave = (recordType, recordId, values) => {
-    const loadedRecord = record.load({
-      type: recordType,
-      id: recordId,
-      isDynamic: false
-    });
-
-    Object.keys(values).forEach((fieldId) => {
-      loadedRecord.setValue({
-        fieldId,
-        value: values[fieldId]
-      });
-    });
-
-    loadedRecord.save({
-      enableSourcing: false,
-      ignoreMandatoryFields: true
-    });
-  };
-
-  const applySublistUpdate = (recordType, recordId, row, bodyValues, lineValues) => {
-    const locator = getLineLocator(row);
-    if (!locator.sublistId) {
-      throw Error('Sublist updates require sublistid column.');
-    }
-
-    const loadedRecord = record.load({
-      type: recordType,
-      id: recordId,
-      isDynamic: false
-    });
-
-    Object.keys(bodyValues).forEach((fieldId) => {
-      loadedRecord.setValue({
-        fieldId,
-        value: bodyValues[fieldId]
-      });
-    });
-
-    const lineIndex = resolveLineIndex(loadedRecord, locator);
-    Object.keys(lineValues).forEach((fieldId) => {
-      loadedRecord.setSublistValue({
-        sublistId: locator.sublistId,
-        fieldId,
-        line: lineIndex,
-        value: lineValues[fieldId]
-      });
-    });
-
-    loadedRecord.save({
-      enableSourcing: false,
-      ignoreMandatoryFields: true
-    });
-
-    return {
-      sublistId: locator.sublistId,
-      lineIndex
-    };
-  };
-
   const createRecord = (recordType, bodyValues) => {
     const createdRecord = record.create({
       type: recordType,
@@ -298,6 +238,23 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   };
 
   const deleteRecord = (recordType, recordId) => record.delete({ type: recordType, id: recordId });
+  const buildUpdateReduceKey = (recordType, recordId) => `upd::${recordType}::${recordId}`;
+  const isUpdateReduceKey = (key) => key.startsWith('upd::');
+
+  const sortDeferredOperations = (operations) => operations.sort((left, right) => {
+    const leftSeq = left.operationSequence;
+    const rightSeq = right.operationSequence;
+    if (leftSeq === null && rightSeq === null) {
+      return 0;
+    }
+    if (leftSeq === null) {
+      return 1;
+    }
+    if (rightSeq === null) {
+      return -1;
+    }
+    return leftSeq - rightSeq;
+  });
 
   const getInputData = () => {
     const config = readConfig();
@@ -380,7 +337,10 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         return;
       }
 
-      const effectiveMode = lineFieldIds.length ? 'sublist-load-save' : (config.forceLoadSave ? 'load-save' : 'inline-edit');
+      const needsDeferredLoadSave = lineFieldIds.length || config.forceLoadSave;
+      const effectiveMode = lineFieldIds.length
+        ? 'sublist-load-save-reduce'
+        : (config.forceLoadSave ? 'load-save-reduce' : 'inline-edit');
 
       if (config.dryRun) {
         log.audit({
@@ -399,15 +359,23 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         return;
       }
 
+      if (needsDeferredLoadSave) {
+        context.write({
+          key: buildUpdateReduceKey(recordType, recordId),
+          value: JSON.stringify({
+            recordType,
+            recordId,
+            bodyValues,
+            lineValues,
+            locator: getLineLocator(row),
+            operationSequence: toIntegerOrNull(row.operationsequence)
+          })
+        });
+        return;
+      }
+
       try {
-        let sublistResult = null;
-        if (lineFieldIds.length) {
-          sublistResult = applySublistUpdate(recordType, recordId, row, bodyValues, lineValues);
-        } else if (config.forceLoadSave) {
-          applyByLoadSave(recordType, recordId, bodyValues);
-        } else {
-          applyBySubmitFields(recordType, recordId, bodyValues);
-        }
+        applyBySubmitFields(recordType, recordId, bodyValues);
 
         log.audit({
           title: 'Patched record',
@@ -418,8 +386,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
             mode: effectiveMode,
             bodyFieldIds,
             lineFieldIds,
-            sublistId: sublistResult ? sublistResult.sublistId : '',
-            lineIndex: sublistResult ? sublistResult.lineIndex : ''
+            sublistId: '',
+            lineIndex: ''
           }
         });
         context.write({ key: 'patched', value: '1' });
@@ -519,6 +487,77 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   };
 
   const reduce = (context) => {
+    if (isUpdateReduceKey(context.key)) {
+      const config = readConfig();
+      const operations = context.values.map((value) => JSON.parse(value));
+      const sortedOperations = sortDeferredOperations(operations);
+
+      const first = sortedOperations[0];
+
+      try {
+        const loadedRecord = record.load({
+          type: first.recordType,
+          id: first.recordId,
+          isDynamic: false
+        });
+
+        sortedOperations.forEach((operation) => {
+          const bodyFieldIds = Object.keys(operation.bodyValues || {});
+          const lineFieldIds = Object.keys(operation.lineValues || {});
+
+          bodyFieldIds.forEach((fieldId) => {
+            loadedRecord.setValue({
+              fieldId,
+              value: operation.bodyValues[fieldId]
+            });
+          });
+
+          if (lineFieldIds.length) {
+            const lineIndex = resolveLineIndex(loadedRecord, operation.locator);
+            lineFieldIds.forEach((fieldId) => {
+              loadedRecord.setSublistValue({
+                sublistId: operation.locator.sublistId,
+                fieldId,
+                line: lineIndex,
+                value: operation.lineValues[fieldId]
+              });
+            });
+          }
+        });
+
+        loadedRecord.save({
+          enableSourcing: false,
+          ignoreMandatoryFields: true
+        });
+
+        log.audit({
+          title: 'Patched record in reduce',
+          details: {
+            recordType: first.recordType,
+            recordId: first.recordId,
+            operationCount: sortedOperations.length
+          }
+        });
+        context.write({ key: 'patched', value: String(sortedOperations.length) });
+      } catch (error) {
+        log.error({
+          title: 'Reduce patch failure',
+          details: {
+            recordType: first.recordType,
+            recordId: first.recordId,
+            operationCount: sortedOperations.length,
+            errorName: error.name,
+            errorMessage: error.message
+          }
+        });
+        context.write({ key: 'failed', value: String(sortedOperations.length) });
+        if (config.stopOnError) {
+          throw error;
+        }
+      }
+      return;
+    }
+
     let total = 0;
     context.values.forEach((value) => {
       total += parseInt(value, 10) || 0;
