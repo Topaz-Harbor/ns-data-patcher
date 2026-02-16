@@ -6,7 +6,7 @@ Data Patcher is a Topaz Harbor NetSuite admin utility for scheduling batch updat
 
 This utility is part of the **Topaz Harbor Admin Utilities** lineup.
 
-## Phase 1 Scope
+## Current Scope
 
 - Scheduled batch updates for body/header fields.
 - Query-driven updates with a column alias convention.
@@ -57,10 +57,9 @@ Each deployment can have its own SuiteQL and script parameters.
 - Script object:
   - `Data Patcher/src/Objects/customscript_th_data_patcher.xml`
 
-## Roadmap
+## Planned Updates
 
-- Phase 2: sublist updates from query results.
-- Phase 3: optional create/delete actions driven by guarded action semantics.
+- See `docs/planned-updates.md`.
 
 ## License
 

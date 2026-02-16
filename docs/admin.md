@@ -4,7 +4,7 @@
 
 Data Patcher runs a SuiteQL query and applies body-field updates to records returned by that query.
 
-Phase 1 supports header/body fields only.
+Current release supports header/body fields only.
 
 ## Job Model
 
@@ -79,8 +79,8 @@ Use `Force Load + Save` only when update behavior requires full load/save semant
 - Verify value compatibility for target field types.
 
 ### Sublist update requested
-- Phase 1 does not support sublist changes.
-- Route to Phase 2 design; do not force this through alias columns.
+- Current release does not support sublist changes.
+- See `docs/planned-updates.md` for planned enhancement path.
 
 ## Governance Notes
 
