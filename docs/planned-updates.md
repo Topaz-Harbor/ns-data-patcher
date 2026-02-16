@@ -2,22 +2,6 @@
 
 This file is the single source for planned enhancements.
 
-## Planned Enhancement: Sublist Updates
-
-Goal:
-
-- Support controlled updates to sublist line values from query results.
-
-Design direction:
-
-- Keep current body-field alias model for body updates.
-- Introduce an explicit sublist alias contract for line-level targeting.
-- Add guardrails for line-key matching and duplicate-line ambiguity.
-
-Status:
-
-- Not implemented.
-
 ## Planned Enhancement: Action-Driven Operations
 
 Goal:

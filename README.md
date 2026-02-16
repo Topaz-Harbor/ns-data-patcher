@@ -8,10 +8,11 @@ This utility is part of the **Topaz Harbor Admin Utilities** lineup.
 
 ## Current Scope
 
-- Scheduled batch updates for body/header fields.
+- Scheduled batch updates for body/header fields and sublist lines.
 - Query-driven updates with a column alias convention.
 - Default update path: `record.submitFields(...)`.
-- Optional override path: `record.load(...)` + `record.save(...)`.
+- Automatic `record.load(...)` + `record.save(...)` for sublist changes.
+- Optional override path for body-only updates: `record.load(...)` + `record.save(...)`.
 
 ## Core Paradigm
 
@@ -36,6 +37,14 @@ Use **multiple deployments of the same script** to create separate jobs, for exa
 - one-time remediation run
 
 Each deployment can have its own SuiteQL and script parameters.
+
+## Query Alias Conventions
+
+- Body fields: `fieldid_<fieldid>`
+- Sublist fields: `linefield_<fieldid>`
+- Sublist target columns (required when using `linefield_` aliases):
+  - `sublistid`
+  - one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
 
 ## Installation Paths
 

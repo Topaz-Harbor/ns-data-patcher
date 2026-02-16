@@ -4,7 +4,7 @@
 
 Data Patcher runs a SuiteQL query and applies body-field updates to records returned by that query.
 
-Current release supports header/body fields only.
+Current release supports header/body fields and sublist line updates.
 
 ## Job Model
 
@@ -23,7 +23,11 @@ Your SuiteQL must return these columns:
 
 - `recordtype`
 - `recordid`
-- update columns aliased as `fieldid_<fieldid>`
+- update columns aliased as `fieldid_<fieldid>` for body fields
+- optional sublist columns aliased as `linefield_<fieldid>` for line fields
+- when using sublist aliases, include:
+  - `sublistid`
+  - one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
 
 Example:
 
@@ -80,11 +84,12 @@ Use `Force Load + Save` only when update behavior requires full load/save semant
 - Verify value compatibility for target field types.
 
 ### Sublist update requested
-- Current release does not support sublist changes.
-- See `docs/planned-updates.md` for planned enhancement path.
+- Use `linefield_` aliases and include required locator columns.
+- Sublist updates always run in load/save mode; Inline Edit cannot update lines.
 
 ## Governance Notes
 
 - Inline Edit (`record.submitFields`) updates body fields only.
+- Sublist line updates require `record.load` + `record.save`.
 - Ensure deterministic `ORDER BY` for paged SuiteQL.
 - For large remediations, use capped runs and staggered schedules.

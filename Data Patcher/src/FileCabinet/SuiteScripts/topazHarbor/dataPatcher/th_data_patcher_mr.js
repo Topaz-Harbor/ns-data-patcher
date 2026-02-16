@@ -1,6 +1,6 @@
 /**
  * Data Patcher Map/Reduce Script
- * Runs a parameterized SuiteQL query and applies header-field updates for each result row.
+ * Runs a parameterized SuiteQL query and applies body/sublist updates for each result row.
  *
  * @NApiVersion 2.1
  * @NScriptType MapReduceScript
@@ -9,6 +9,7 @@
  */
 define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, query, record, runtime) => {
   const DEFAULT_ALIAS_PREFIX = 'fieldid_';
+  const DEFAULT_LINE_ALIAS_PREFIX = 'linefield_';
   const DEFAULT_PAGE_SIZE = 100;
   const MAX_PAGE_SIZE = 1000;
   const CACHE_NAME = 'th_data_patcher_meta';
@@ -94,6 +95,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       suiteql: config.suiteql,
       inputQuery,
       aliasPrefix: config.aliasPrefix.toLowerCase(),
+      lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX,
       columnNames,
       savedAt: new Date().toISOString()
     };
@@ -145,15 +147,15 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     return row;
   };
 
-  const buildUpdateValues = (row, aliasPrefix) => {
+  const buildAliasValues = (row, prefix) => {
     const updates = {};
-    const prefix = aliasPrefix.toLowerCase();
+    const normalizedPrefix = prefix.toLowerCase();
 
     Object.keys(row).forEach((key) => {
-      if (!key.startsWith(prefix)) {
+      if (!key.startsWith(normalizedPrefix)) {
         return;
       }
-      const fieldId = key.slice(prefix.length);
+      const fieldId = key.slice(normalizedPrefix.length);
       if (!fieldId) {
         return;
       }
@@ -161,6 +163,48 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     });
 
     return updates;
+  };
+
+  const getLineLocator = (row) => ({
+    sublistId: row.sublistid ? row.sublistid.toString() : '',
+    lineUniqueKey: row.lineuniquekey === undefined || row.lineuniquekey === null ? '' : row.lineuniquekey.toString(),
+    lineNumber: toIntegerOrNull(row.linenumber),
+    lineIndex: toIntegerOrNull(row.lineindex)
+  });
+
+  const resolveLineIndex = (loadedRecord, locator) => {
+    const lineCount = loadedRecord.getLineCount({ sublistId: locator.sublistId });
+
+    if (locator.lineIndex !== null) {
+      if (locator.lineIndex < 0 || locator.lineIndex >= lineCount) {
+        throw Error(`Line index ${locator.lineIndex} is out of range for sublist ${locator.sublistId}.`);
+      }
+      return locator.lineIndex;
+    }
+
+    if (locator.lineNumber !== null) {
+      const zeroBased = locator.lineNumber - 1;
+      if (zeroBased < 0 || zeroBased >= lineCount) {
+        throw Error(`Line number ${locator.lineNumber} is out of range for sublist ${locator.sublistId}.`);
+      }
+      return zeroBased;
+    }
+
+    if (locator.lineUniqueKey) {
+      for (let index = 0; index < lineCount; index += 1) {
+        const value = loadedRecord.getSublistValue({
+          sublistId: locator.sublistId,
+          fieldId: 'lineuniquekey',
+          line: index
+        });
+        if (value !== undefined && value !== null && value.toString() === locator.lineUniqueKey) {
+          return index;
+        }
+      }
+      throw Error(`No line matched lineuniquekey ${locator.lineUniqueKey} on sublist ${locator.sublistId}.`);
+    }
+
+    throw Error('Sublist updates require lineindex, linenumber, or lineuniquekey.');
   };
 
   const applyBySubmitFields = (recordType, recordId, values) => {
@@ -195,6 +239,46 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     });
   };
 
+  const applySublistUpdate = (recordType, recordId, row, bodyValues, lineValues) => {
+    const locator = getLineLocator(row);
+    if (!locator.sublistId) {
+      throw Error('Sublist updates require sublistid column.');
+    }
+
+    const loadedRecord = record.load({
+      type: recordType,
+      id: recordId,
+      isDynamic: false
+    });
+
+    Object.keys(bodyValues).forEach((fieldId) => {
+      loadedRecord.setValue({
+        fieldId,
+        value: bodyValues[fieldId]
+      });
+    });
+
+    const lineIndex = resolveLineIndex(loadedRecord, locator);
+    Object.keys(lineValues).forEach((fieldId) => {
+      loadedRecord.setSublistValue({
+        sublistId: locator.sublistId,
+        fieldId,
+        line: lineIndex,
+        value: lineValues[fieldId]
+      });
+    });
+
+    loadedRecord.save({
+      enableSourcing: false,
+      ignoreMandatoryFields: true
+    });
+
+    return {
+      sublistId: locator.sublistId,
+      lineIndex
+    };
+  };
+
   const getInputData = () => {
     const config = readConfig();
 
@@ -209,9 +293,10 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     log.audit({
       title: 'Data patch input configured',
       details: {
-        mode: config.forceLoadSave ? 'load-save' : 'submit-fields',
+        mode: config.forceLoadSave ? 'load-save' : 'inline-edit',
         dryRun: config.dryRun,
         aliasPrefix: config.aliasPrefix,
+        lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX,
         maxRows: config.maxRows,
         pageSize: config.pageSize,
         inferredColumns: columnNames
@@ -248,17 +333,21 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       return;
     }
 
-    const updateValues = buildUpdateValues(row, config.aliasPrefix);
-    const fieldIds = Object.keys(updateValues);
+    const bodyValues = buildAliasValues(row, config.aliasPrefix);
+    const lineValues = buildAliasValues(row, DEFAULT_LINE_ALIAS_PREFIX);
+    const bodyFieldIds = Object.keys(bodyValues);
+    const lineFieldIds = Object.keys(lineValues);
 
-    if (!fieldIds.length) {
+    if (!bodyFieldIds.length && !lineFieldIds.length) {
       log.audit({
         title: 'Skipped row: no update aliases found',
-        details: { recordType, recordId, aliasPrefix: config.aliasPrefix }
+        details: { recordType, recordId, aliasPrefix: config.aliasPrefix, lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX }
       });
       context.write({ key: 'skipped', value: '1' });
       return;
     }
+
+    const effectiveMode = lineFieldIds.length ? 'sublist-load-save' : (config.forceLoadSave ? 'load-save' : 'inline-edit');
 
     if (config.dryRun) {
       log.audit({
@@ -266,7 +355,10 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         details: {
           recordType,
           recordId,
-          values: updateValues
+          mode: effectiveMode,
+          bodyValues,
+          lineValues,
+          sublistId: row.sublistid || ''
         }
       });
       context.write({ key: 'previewed', value: '1' });
@@ -274,10 +366,13 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     }
 
     try {
-      if (config.forceLoadSave) {
-        applyByLoadSave(recordType, recordId, updateValues);
+      let sublistResult = null;
+      if (lineFieldIds.length) {
+        sublistResult = applySublistUpdate(recordType, recordId, row, bodyValues, lineValues);
+      } else if (config.forceLoadSave) {
+        applyByLoadSave(recordType, recordId, bodyValues);
       } else {
-        applyBySubmitFields(recordType, recordId, updateValues);
+        applyBySubmitFields(recordType, recordId, bodyValues);
       }
 
       log.audit({
@@ -285,8 +380,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         details: {
           recordType,
           recordId,
-          mode: config.forceLoadSave ? 'load-save' : 'submit-fields',
-          fieldIds
+          mode: effectiveMode,
+          bodyFieldIds,
+          lineFieldIds,
+          sublistId: sublistResult ? sublistResult.sublistId : '',
+          lineIndex: sublistResult ? sublistResult.lineIndex : ''
         }
       });
       context.write({ key: 'patched', value: '1' });
@@ -296,7 +394,9 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         details: {
           recordType,
           recordId,
-          fieldIds,
+          mode: effectiveMode,
+          bodyFieldIds,
+          lineFieldIds,
           errorName: error.name,
           errorMessage: error.message
         }

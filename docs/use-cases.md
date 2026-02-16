@@ -95,6 +95,31 @@ Use same query shape, but set:
 
 Use this only when `submitFields` behavior is insufficient.
 
+## Scenario 6: Update a Specific Item Sublist Line
+
+Goal: update one line-level custom field by `lineuniquekey`.
+
+```sql
+SELECT
+  'salesorder' AS recordtype,
+  t.id AS recordid,
+  'item' AS sublistid,
+  tl.lineuniquekey AS lineuniquekey,
+  'T' AS linefield_custcol_needs_reprice
+FROM transaction t
+JOIN transactionline tl ON tl.transaction = t.id
+WHERE t.type = 'SalesOrd'
+  AND t.id = 12345
+  AND tl.mainline = 'F'
+ORDER BY t.id, tl.lineuniquekey
+```
+
+Recommended settings:
+
+- `Dry Run = true`, then `false`
+- `Force Load + Save = false` (ignored for line updates because load/save is required)
+- `Stop On Error = true` for targeted fixes
+
 ## Query Construction Notes
 
 - Always include deterministic `ORDER BY`.
