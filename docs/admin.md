@@ -115,6 +115,8 @@ Use this runbook as the standard operating procedure for configuring Data Patche
 6. Set `Dry Run = false`.
 7. Execute again or add schedule.
 
+Pro Tip: when running Dry Run on large datasets, set `Max Rows` to a small value (for example `10`) to keep preview logs manageable.
+
 ## Update Mode Guidance
 
 Use default Inline Edit mode (`record.submitFields`) when possible because it is lighter and faster.
