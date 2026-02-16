@@ -59,7 +59,6 @@ ORDER BY t.id
 - `Dry Run`: logs intended updates without writing changes.
 - `Stop On Error`: fail immediately on first record error.
 - `Max Rows`: optional row cap per run (0 means uncapped).
-- `Page Size`: query page size for `runSuiteQLPaged` (script enforces 5 to 1000).
 - `Alias Prefix`: default `fieldid_`.
 - `Query Custom Script ID`: optional query diagnostic owner tag.
 - `Enable Create/Delete Actions`: required to allow `action=create` or `action=delete`.

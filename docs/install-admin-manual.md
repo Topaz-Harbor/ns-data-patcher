@@ -40,7 +40,6 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
 | Dry Run | `_th_dp_dry_run` (final: `custscript_th_dp_dry_run`) | Check Box |
 | Stop On Error | `_th_dp_stop_on_error` (final: `custscript_th_dp_stop_on_error`) | Check Box |
 | Max Rows | `_th_dp_max_rows` (final: `custscript_th_dp_max_rows`) | Free-Form Text |
-| Page Size | `_th_dp_page_size` (final: `custscript_th_dp_page_size`) | Free-Form Text |
 | Alias Prefix | `_th_dp_alias_prefix` (final: `custscript_th_dp_alias_prefix`) | Free-Form Text |
 | Query Custom Script ID | `_th_dp_custom_script_id` (final: `custscript_th_dp_custom_script_id`) | Free-Form Text |
 | Enable Create/Delete Actions | `_th_dp_enable_actions` (final: `custscript_th_dp_enable_actions`) | Check Box |
@@ -50,7 +49,6 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
   - Force Load + Save Mode = unchecked
   - Stop On Error = unchecked
   - Max Rows = `0`
-  - Page Size = `100`
   - Alias Prefix = `fieldid_`
   - Query Custom Script ID = `th_data_patcher`
   - Enable Create/Delete Actions = unchecked

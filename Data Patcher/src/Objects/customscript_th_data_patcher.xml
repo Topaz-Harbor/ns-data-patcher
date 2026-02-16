@@ -48,14 +48,6 @@
       <defaultvalue>0</defaultvalue>
       <description>Optional row cap. 0 means no explicit cap.</description>
     </scriptcustomfield>
-    <scriptcustomfield scriptid="custscript_th_dp_page_size">
-      <accesslevel>2</accesslevel>
-      <fieldtype>TEXT</fieldtype>
-      <label>Page Size</label>
-      <storevalue>T</storevalue>
-      <defaultvalue>100</defaultvalue>
-      <description>SuiteQL page size for runSuiteQLPaged. Range enforced in script: 5-1000.</description>
-    </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_alias_prefix">
       <accesslevel>2</accesslevel>
       <fieldtype>TEXT</fieldtype>
@@ -70,7 +62,7 @@
       <label>Query Custom Script ID</label>
       <storevalue>T</storevalue>
       <defaultvalue>th_data_patcher</defaultvalue>
-      <description>Optional query customScriptId used by runSuiteQLPaged diagnostics.</description>
+      <description>Optional query customScriptId used for query diagnostics.</description>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_enable_actions">
       <accesslevel>2</accesslevel>

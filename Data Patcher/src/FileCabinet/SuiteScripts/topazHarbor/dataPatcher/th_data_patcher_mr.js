@@ -11,8 +11,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   const DEFAULT_ALIAS_PREFIX = 'fieldid_';
   const DEFAULT_LINE_ALIAS_PREFIX = 'linefield_';
   const DEFAULT_ACTION = 'update';
-  const DEFAULT_PAGE_SIZE = 100;
-  const MAX_PAGE_SIZE = 1000;
   const CACHE_NAME = 'th_data_patcher_meta';
   const CACHE_TTL_SECONDS = 7200;
 
@@ -22,7 +20,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     dryRun: 'custscript_th_dp_dry_run',
     stopOnError: 'custscript_th_dp_stop_on_error',
     maxRows: 'custscript_th_dp_max_rows',
-    pageSize: 'custscript_th_dp_page_size',
     aliasPrefix: 'custscript_th_dp_alias_prefix',
     customScriptId: 'custscript_th_dp_custom_script_id',
     enableActions: 'custscript_th_dp_enable_actions'
@@ -38,13 +35,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     return Number.isNaN(parsed) ? null : parsed;
   };
 
-  const normalizePageSize = (pageSize) => {
-    if (!pageSize || pageSize < 5) {
-      return DEFAULT_PAGE_SIZE;
-    }
-    return Math.min(pageSize, MAX_PAGE_SIZE);
-  };
-
   const readConfig = () => {
     const script = runtime.getCurrentScript();
     const suiteql = script.getParameter({ name: PARAMS.suiteql });
@@ -56,7 +46,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       dryRun: toBoolean(script.getParameter({ name: PARAMS.dryRun })),
       stopOnError: toBoolean(script.getParameter({ name: PARAMS.stopOnError })),
       maxRows: toIntegerOrNull(script.getParameter({ name: PARAMS.maxRows })),
-      pageSize: normalizePageSize(toIntegerOrNull(script.getParameter({ name: PARAMS.pageSize }))),
       aliasPrefix: (script.getParameter({ name: PARAMS.aliasPrefix }) || DEFAULT_ALIAS_PREFIX).toString(),
       customScriptId: customScriptIdRaw ? customScriptIdRaw.toString().trim() : '',
       enableActions: toBoolean(script.getParameter({ name: PARAMS.enableActions }))
@@ -330,7 +319,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX,
         nonUpdateActionsEnabled: config.enableActions,
         maxRows: config.maxRows,
-        pageSize: config.pageSize,
         inferredColumns: columnNames
       }
     });
