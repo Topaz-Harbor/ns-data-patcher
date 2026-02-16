@@ -1,0 +1,84 @@
+<mapreducescript scriptid="customscript_th_data_patcher">
+  <description>Topaz Harbor Data Patcher for query-driven admin batch updates.</description>
+  <isinactive>F</isinactive>
+  <name>TH Data Patcher</name>
+  <notifyadmins>F</notifyadmins>
+  <notifyemails></notifyemails>
+  <notifyowner>F</notifyowner>
+  <scriptfile>[/SuiteScripts/topazHarbor/dataPatcher/th_data_patcher_mr.js]</scriptfile>
+  <scriptcustomfields>
+    <scriptcustomfield scriptid="custscript_th_dp_suiteql">
+      <accesslevel>2</accesslevel>
+      <fieldtype>CLOBTEXT</fieldtype>
+      <ismandatory>T</ismandatory>
+      <label>SuiteQL</label>
+      <storevalue>T</storevalue>
+      <description>SuiteQL query used by this deployment. Must return recordtype, recordid, and fieldid_* aliases.</description>
+      <help>Required. Include deterministic ORDER BY and aliases fieldid_&lt;fieldid&gt; for body updates.</help>
+    </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_th_dp_force_loadsave">
+      <accesslevel>2</accesslevel>
+      <fieldtype>CHECKBOX</fieldtype>
+      <label>Force Load + Save Mode</label>
+      <storevalue>T</storevalue>
+      <defaultchecked>F</defaultchecked>
+      <description>If checked, use record.load/record.save instead of submitFields.</description>
+    </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_th_dp_dry_run">
+      <accesslevel>2</accesslevel>
+      <fieldtype>CHECKBOX</fieldtype>
+      <label>Dry Run</label>
+      <storevalue>T</storevalue>
+      <defaultchecked>T</defaultchecked>
+      <description>If checked, no records are updated. Logs preview output only.</description>
+    </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_th_dp_stop_on_error">
+      <accesslevel>2</accesslevel>
+      <fieldtype>CHECKBOX</fieldtype>
+      <label>Stop On Error</label>
+      <storevalue>T</storevalue>
+      <defaultchecked>F</defaultchecked>
+      <description>If checked, script exits immediately on first patch failure.</description>
+    </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_th_dp_max_rows">
+      <accesslevel>2</accesslevel>
+      <fieldtype>TEXT</fieldtype>
+      <label>Max Rows</label>
+      <storevalue>T</storevalue>
+      <defaultvalue>0</defaultvalue>
+      <description>Optional row cap. 0 means no explicit cap.</description>
+    </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_th_dp_page_size">
+      <accesslevel>2</accesslevel>
+      <fieldtype>TEXT</fieldtype>
+      <label>Page Size</label>
+      <storevalue>T</storevalue>
+      <defaultvalue>100</defaultvalue>
+      <description>SuiteQL page size for runSuiteQLPaged. Range enforced in script: 5-1000.</description>
+    </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_th_dp_alias_prefix">
+      <accesslevel>2</accesslevel>
+      <fieldtype>TEXT</fieldtype>
+      <label>Alias Prefix</label>
+      <storevalue>T</storevalue>
+      <defaultvalue>fieldid_</defaultvalue>
+      <description>Column alias prefix used to identify update fields.</description>
+    </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_th_dp_custom_script_id">
+      <accesslevel>2</accesslevel>
+      <fieldtype>TEXT</fieldtype>
+      <label>Query Custom Script ID</label>
+      <storevalue>T</storevalue>
+      <defaultvalue>th_data_patcher</defaultvalue>
+      <description>Optional query customScriptId used by runSuiteQLPaged diagnostics.</description>
+    </scriptcustomfield>
+  </scriptcustomfields>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_th_data_patcher_default">
+      <isdeployed>F</isdeployed>
+      <loglevel>DEBUG</loglevel>
+      <status>TESTING</status>
+      <title>TH Data Patcher - Default</title>
+    </scriptdeployment>
+  </scriptdeployments>
+</mapreducescript>
