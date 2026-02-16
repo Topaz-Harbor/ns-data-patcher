@@ -3,9 +3,7 @@
 ## What It Does
 
 Data Patcher runs a SuiteQL query and applies update/create/delete actions from query results.
-
-Current release supports:
-
+It supports:
 - body/header updates
 - sublist line updates
 - optional create/delete actions (when explicitly enabled)
@@ -96,8 +94,12 @@ In this example, final value is `B` because sequence `20` is applied after `10`.
 - `Stop On Error`: best-effort global abort. First failure sets a shared cache abort flag and later operations skip when they detect it.
 - `Max Rows`: optional row cap per run (0 means uncapped).
 - `Alias Prefix`: default `fieldid_`.
-- `Query Custom Script ID`: optional query diagnostic owner tag.
 - `Enable Create/Delete Actions`: required to allow `action=create` or `action=delete`.
+
+## Advanced: Query Custom Script ID
+
+- `Query Custom Script ID` is an optional performance/diagnostic tag for SuiteQL ownership.
+- Most admins can leave the default value.
 
 ## Runbook
 

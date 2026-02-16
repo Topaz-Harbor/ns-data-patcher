@@ -95,7 +95,7 @@ Use same query shape, but set:
 
 Use this only when `submitFields` behavior is insufficient.
 
-## Scenario 6: Update a Specific Item Sublist Line
+## Advanced Scenario 6: Update a Specific Item Sublist Line
 
 Goal: update one line-level custom field by `lineuniquekey`.
 
@@ -120,7 +120,7 @@ Recommended settings:
 - `Force Load + Save = false` (ignored for line updates because load/save is required)
 - `Stop On Error = true` for targeted fixes
 
-## Scenario 7: Create Task Records from Query Output
+## Advanced Scenario 7: Create Task Records from Query Output
 
 Goal: create follow-up tasks for open support cases.
 
@@ -144,7 +144,7 @@ Recommended settings:
 - `Dry Run = true`, then `false`
 - `Stop On Error = false`
 
-## Scenario 8: Delete Cleanup Custom Records
+## Advanced Scenario 8: Delete Cleanup Custom Records
 
 Goal: remove stale staging records after migration completion.
 
@@ -172,4 +172,5 @@ Recommended settings:
 - Use `action` when running create/delete workflows.
 - Use `fieldid_` alias prefix for every update field.
 - Use `linefield_` alias prefix for line updates.
+- Advanced: use `operationsequence` when multiple rows update the same record and order matters.
 - Keep result set to one row per target record whenever possible.

@@ -39,7 +39,7 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
 | Stop On Error | `_th_dp_stop_on_error` (final: `custscript_th_dp_stop_on_error`) | Check Box | unchecked |
 | Max Rows | `_th_dp_max_rows` (final: `custscript_th_dp_max_rows`) | Free-Form Text | `0` |
 | Alias Prefix | `_th_dp_alias_prefix` (final: `custscript_th_dp_alias_prefix`) | Free-Form Text | `fieldid_` |
-| Query Custom Script ID | `_th_dp_custom_script_id` (final: `custscript_th_dp_custom_script_id`) | Free-Form Text | `th_data_patcher` |
+| Query Custom Script ID (Advanced) | `_th_dp_custom_script_id` (final: `custscript_th_dp_custom_script_id`) | Free-Form Text | `th_data_patcher` |
 | Enable Create/Delete Actions | `_th_dp_enable_actions` (final: `custscript_th_dp_enable_actions`) | Check Box | unchecked |
 
 4. Create first deployment.

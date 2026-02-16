@@ -19,7 +19,8 @@ This utility is part of the **Topaz Harbor Admin Utilities** lineup.
 
 ## Core Paradigm
 
-Each deployment run executes one SuiteQL statement. The script reads each result row and executes an action.
+Each deployment run executes one SuiteQL statement.
+The script reads each result row and runs an action.
 
 Required columns by action:
 
@@ -38,9 +39,9 @@ For sublist updates (`linefield_` aliases), include:
 - `sublistid`
 - one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
 
-Optional ordering column for grouped record updates:
+## Advanced: Ordered Operations
 
-- `operationsequence` (number): lower values are applied first within a record group
+- `operationsequence` (number): lower values are applied first when multiple rows update the same record.
 
 ## Admin-Friendly Scheduling Model
 
@@ -51,15 +52,6 @@ Use **multiple deployments of the same script** to create separate jobs, for exa
 - one-time remediation run
 
 Each deployment can have its own SuiteQL and script parameters.
-
-## Query Alias Conventions
-
-- Body fields: `fieldid_<fieldid>`
-- Sublist fields: `linefield_<fieldid>`
-- Action: `action` (`update` default, optional `create`, `delete`)
-- Sublist target columns (required when using `linefield_` aliases):
-  - `sublistid`
-  - one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
 
 ## Installation Paths
 
