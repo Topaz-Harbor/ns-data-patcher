@@ -22,8 +22,6 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
 2. Create Map/Reduce script record.
 - NetSuite path:
   - `Customization > Scripting > Scripts > New`
-- Script type:
-  - `Map/Reduce Script`
 - Name:
   - `TH Data Patcher`
 - Script ID:

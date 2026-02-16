@@ -101,6 +101,8 @@ In this example, final value is `B` because sequence `20` is applied after `10`.
 
 ## Runbook
 
+Use this runbook as the standard operating procedure for configuring Data Patcher jobs.
+
 1. Duplicate the default deployment.
 2. Name deployment for the use case.
 3. Paste validated query.
@@ -150,5 +152,4 @@ Load/save updates are grouped and applied in `reduce()` once per record to avoid
 - Create/delete actions are deployment-gated by `Enable Create/Delete Actions`.
 - Ensure deterministic `ORDER BY` for stable and repeatable query runs.
 - For large remediations, use capped runs and staggered schedules.
-- `Stop On Error` uses shared cache signaling; treat it as cooperative abort, not an instantaneous hard stop.
-- Abort signaling is deployment-scoped and reset at the start of each run.
+- `Stop On Error` stops the run as quickly as possible after the first error, but some in-flight changes may still finish.

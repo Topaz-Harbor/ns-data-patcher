@@ -81,10 +81,6 @@ Each deployment can have its own SuiteQL and script parameters.
 - Script object:
   - `Data Patcher/src/Objects/customscript_th_data_patcher.xml`
 
-## Planned Updates
-
-- See `docs/planned-updates.md`.
-
 ## License
 
 This project is licensed under the MIT License.
