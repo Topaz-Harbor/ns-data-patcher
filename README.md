@@ -6,14 +6,15 @@ Data Patcher is a Topaz Harbor NetSuite admin utility for scheduling batch updat
 
 This utility is part of the **Topaz Harbor Admin Utilities** lineup.
 
-## Current Scope
+## What It Does
 
-- Scheduled batch updates for body/header fields and sublist lines.
-- Optional action-driven create/delete from query results (gated by script parameter).
-- Query-driven updates with a column alias convention.
-- Default update path: `record.submitFields(...)`.
-- Automatic `record.load(...)` + `record.save(...)` for sublist changes.
-- Optional override path for body-only updates: `record.load(...)` + `record.save(...)`.
+- Runs scheduled Map/Reduce jobs from a SuiteQL query.
+- Updates body fields on existing records.
+- Updates sublist line fields on existing records.
+- Optionally creates new records from query rows.
+- Optionally deletes records from query rows.
+- Uses Inline Edit (`record.submitFields`) for body updates when possible.
+- Automatically uses load/save for sublist updates.
 
 ## Core Paradigm
 
