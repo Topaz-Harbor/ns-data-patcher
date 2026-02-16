@@ -102,6 +102,7 @@ In this example, final value is `B` because sequence `20` is applied after `10`.
 
 - `Query Custom Script ID` is an optional performance/diagnostic tag for SuiteQL ownership.
 - Most admins can leave the default value.
+- Use case: set a unique value when running high-volume jobs so technical teams can quickly identify and tune that specific query in logs and performance review.
 
 ## Runbook
 
