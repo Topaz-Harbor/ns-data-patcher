@@ -58,7 +58,7 @@ ORDER BY t.id
 - `Force Load + Save Mode`: use `record.load` + `record.save` instead of Inline Edit (`record.submitFields`).
 - `Force Load + Save Mode` note: this exists for edge cases where Inline Edit does not work even when no clear root cause is identified.
 - `Dry Run`: logs intended updates without writing changes.
-- `Stop On Error`: fail immediately on first record error.
+- `Stop On Error`: best-effort global abort. First failure sets a shared cache abort flag and later operations skip when they detect it.
 - `Max Rows`: optional row cap per run (0 means uncapped).
 - `Alias Prefix`: default `fieldid_`.
 - `Query Custom Script ID`: optional query diagnostic owner tag.
@@ -95,6 +95,11 @@ Load/save updates are grouped and applied in `reduce()` once per record to avoid
 - Verify field permissions and editability for target records.
 - Verify value compatibility for target field types.
 
+### Stop On Error still allowed some writes
+- Behavior is best-effort in parallel processing.
+- In-flight operations can finish before they observe the shared abort flag.
+- Review summary counts, especially `aborted`, to understand where execution stopped.
+
 ### Sublist update requested
 - Use `linefield_` aliases and include required locator columns.
 - Sublist updates always run in load/save mode; Inline Edit cannot update lines.
@@ -110,3 +115,4 @@ Load/save updates are grouped and applied in `reduce()` once per record to avoid
 - Create/delete actions are deployment-gated by `Enable Create/Delete Actions`.
 - Ensure deterministic `ORDER BY` for stable and repeatable query runs.
 - For large remediations, use capped runs and staggered schedules.
+- `Stop On Error` uses shared cache signaling; treat it as cooperative abort, not an instantaneous hard stop.

@@ -11,7 +11,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   const DEFAULT_ALIAS_PREFIX = 'fieldid_';
   const DEFAULT_LINE_ALIAS_PREFIX = 'linefield_';
   const DEFAULT_ACTION = 'update';
-  const CACHE_NAME = 'th_data_patcher_meta';
+  const META_CACHE_NAME = 'th_data_patcher_meta';
+  const ABORT_CACHE_NAME = 'th_data_patcher_abort';
   const CACHE_TTL_SECONDS = 7200;
 
   const PARAMS = {
@@ -35,6 +36,14 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     return Number.isNaN(parsed) ? null : parsed;
   };
 
+  const getScriptIdentity = () => {
+    const script = runtime.getCurrentScript();
+    return {
+      scriptId: script.id || 'customscript_th_data_patcher',
+      deploymentId: script.deploymentId || 'customdeploy_th_data_patcher_default'
+    };
+  };
+
   const readConfig = () => {
     const script = runtime.getCurrentScript();
     const suiteql = script.getParameter({ name: PARAMS.suiteql });
@@ -52,11 +61,47 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     };
   };
 
-  const getMetaCache = () => cache.getCache({ name: CACHE_NAME, scope: cache.Scope.PRIVATE });
+  const getMetaCache = () => cache.getCache({ name: META_CACHE_NAME, scope: cache.Scope.PRIVATE });
+  const getAbortCache = () => cache.getCache({ name: ABORT_CACHE_NAME, scope: cache.Scope.PRIVATE });
 
-  const getCacheKey = () => {
-    const script = runtime.getCurrentScript();
-    return `${script.id || 'customscript_th_data_patcher'}::${script.deploymentId || 'customdeploy_th_data_patcher_default'}::columns`;
+  const getMetaCacheKey = () => {
+    const identity = getScriptIdentity();
+    return `${identity.scriptId}::${identity.deploymentId}::columns`;
+  };
+
+  const getAbortCacheKey = () => {
+    const identity = getScriptIdentity();
+    return `${identity.scriptId}::${identity.deploymentId}::abort`;
+  };
+
+  const clearAbortFlag = () => {
+    const abortCache = getAbortCache();
+    const key = getAbortCacheKey();
+    try {
+      abortCache.remove({ key });
+    } catch (error) {
+      abortCache.put({ key, value: 'F', ttl: CACHE_TTL_SECONDS });
+    }
+  };
+
+  const setAbortFlag = (details) => {
+    getAbortCache().put({
+      key: getAbortCacheKey(),
+      value: JSON.stringify({
+        aborted: true,
+        timestamp: new Date().toISOString(),
+        details
+      }),
+      ttl: CACHE_TTL_SECONDS
+    });
+  };
+
+  const isAbortFlagSet = () => {
+    const raw = getAbortCache().get({ key: getAbortCacheKey() });
+    if (!raw || raw === 'F') {
+      return false;
+    }
+    return true;
   };
 
   const buildInputQuery = (config) => {
@@ -93,14 +138,14 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     };
 
     getMetaCache().put({
-      key: getCacheKey(),
+      key: getMetaCacheKey(),
       value: JSON.stringify(payload),
       ttl: CACHE_TTL_SECONDS
     });
   };
 
   const loadColumnMetadata = (config, inputQuery) => {
-    const raw = getMetaCache().get({ key: getCacheKey() });
+    const raw = getMetaCache().get({ key: getMetaCacheKey() });
     if (!raw) {
       return null;
     }
@@ -263,6 +308,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       throw Error('Missing required SuiteQL parameter: custscript_th_dp_suiteql');
     }
 
+    clearAbortFlag();
+
     const inputQuery = buildInputQuery(config);
     const columnNames = inferColumnNames(inputQuery, config.customScriptId);
     saveColumnMetadata(config, inputQuery, columnNames);
@@ -275,6 +322,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         aliasPrefix: config.aliasPrefix,
         lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX,
         nonUpdateActionsEnabled: config.enableActions,
+        stopOnError: config.stopOnError,
         maxRows: config.maxRows,
         inferredColumns: columnNames
       }
@@ -295,6 +343,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
 
     if (!columnNames.length || columnNames.length < valuesArray.length) {
       throw Error('Unable to resolve SuiteQL column names for map processing.');
+    }
+
+    if (config.stopOnError && isAbortFlagSet()) {
+      context.write({ key: 'aborted', value: '1' });
+      return;
     }
 
     const row = materializeRow(columnNames, valuesArray);
@@ -375,6 +428,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       }
 
       try {
+        if (config.stopOnError && isAbortFlagSet()) {
+          context.write({ key: 'aborted', value: '1' });
+          return;
+        }
+
         applyBySubmitFields(recordType, recordId, bodyValues);
 
         log.audit({
@@ -407,7 +465,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
-          throw error;
+          setAbortFlag({ stage: 'map-update', recordType, recordId, errorName: error.name });
         }
       }
       return;
@@ -418,7 +476,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         log.error({ title: 'Create does not support linefield_* aliases', details: { row } });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
-          throw Error('Create does not support linefield_* aliases.');
+          setAbortFlag({ stage: 'map-create-validate', recordType, errorName: 'INVALID_LINE_ALIAS' });
         }
         return;
       }
@@ -436,6 +494,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       }
 
       try {
+        if (config.stopOnError && isAbortFlagSet()) {
+          context.write({ key: 'aborted', value: '1' });
+          return;
+        }
+
         const newId = createRecord(recordType, bodyValues);
         log.audit({ title: 'Created record', details: { action, recordType, newId, bodyFieldIds } });
         context.write({ key: 'created', value: '1' });
@@ -446,7 +509,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
-          throw error;
+          setAbortFlag({ stage: 'map-create', recordType, errorName: error.name });
         }
       }
       return;
@@ -466,6 +529,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       }
 
       try {
+        if (config.stopOnError && isAbortFlagSet()) {
+          context.write({ key: 'aborted', value: '1' });
+          return;
+        }
+
         deleteRecord(recordType, recordId);
         log.audit({ title: 'Deleted record', details: { action, recordType, recordId } });
         context.write({ key: 'deleted', value: '1' });
@@ -476,7 +544,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
-          throw error;
+          setAbortFlag({ stage: 'map-delete', recordType, recordId, errorName: error.name });
         }
       }
       return;
@@ -491,6 +559,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       const config = readConfig();
       const operations = context.values.map((value) => JSON.parse(value));
       const sortedOperations = sortDeferredOperations(operations);
+
+      if (config.stopOnError && isAbortFlagSet()) {
+        context.write({ key: 'aborted', value: String(sortedOperations.length) });
+        return;
+      }
 
       const first = sortedOperations[0];
 
@@ -525,6 +598,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
           }
         });
 
+        if (config.stopOnError && isAbortFlagSet()) {
+          context.write({ key: 'aborted', value: String(sortedOperations.length) });
+          return;
+        }
+
         loadedRecord.save({
           enableSourcing: false,
           ignoreMandatoryFields: true
@@ -552,7 +630,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         });
         context.write({ key: 'failed', value: String(sortedOperations.length) });
         if (config.stopOnError) {
-          throw error;
+          setAbortFlag({ stage: 'reduce-update', recordType: first.recordType, recordId: first.recordId, errorName: error.name });
         }
       }
       return;
@@ -573,6 +651,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       previewed: 0,
       failed: 0,
       skipped: 0,
+      aborted: 0,
       inputErrors: 0,
       mapErrors: 0,
       reduceErrors: 0
