@@ -36,7 +36,6 @@ Your SuiteQL must return these columns:
   - `update` (default if omitted)
   - `create` (requires non-update actions enabled)
   - `delete` (requires non-update actions enabled)
-- optional `operationsequence` (number) for deterministic apply order when multiple rows target the same record load/save group
 
 Example:
 
@@ -51,6 +50,42 @@ WHERE t.type = 'SalesOrd'
   AND t.custbody_order_stage IS NULL
 ORDER BY t.id
 ```
+
+## Advanced: operationsequence
+
+Use `operationsequence` only when multiple query rows target the same record and row order matters.
+
+How it behaves:
+
+- Lower numbers are applied first.
+- Rows without `operationsequence` are applied after numbered rows.
+- Equal values do not guarantee ordering between those rows.
+
+Example (two rows update the same line field on one record):
+
+```sql
+SELECT
+  'update' AS action,
+  'salesorder' AS recordtype,
+  12345 AS recordid,
+  'item' AS sublistid,
+  1 AS linenumber,
+  10 AS operationsequence,
+  'A' AS linefield_custcol_stage_marker
+FROM dual
+UNION ALL
+SELECT
+  'update' AS action,
+  'salesorder' AS recordtype,
+  12345 AS recordid,
+  'item' AS sublistid,
+  1 AS linenumber,
+  20 AS operationsequence,
+  'B' AS linefield_custcol_stage_marker
+FROM dual
+```
+
+In this example, final value is `B` because sequence `20` is applied after `10`.
 
 ## Parameter Reference
 

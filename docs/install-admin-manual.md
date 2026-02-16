@@ -33,25 +33,16 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
 3. Add script parameters.
 - Create these parameters exactly:
 
-| Title | ID (what admin enters) | Type |
-|---|---|---|
-| SuiteQL | `_th_dp_suiteql` (final: `custscript_th_dp_suiteql`) | Long Text |
-| Force Load + Save Mode | `_th_dp_force_loadsave` (final: `custscript_th_dp_force_loadsave`) | Check Box |
-| Dry Run | `_th_dp_dry_run` (final: `custscript_th_dp_dry_run`) | Check Box |
-| Stop On Error | `_th_dp_stop_on_error` (final: `custscript_th_dp_stop_on_error`) | Check Box |
-| Max Rows | `_th_dp_max_rows` (final: `custscript_th_dp_max_rows`) | Free-Form Text |
-| Alias Prefix | `_th_dp_alias_prefix` (final: `custscript_th_dp_alias_prefix`) | Free-Form Text |
-| Query Custom Script ID | `_th_dp_custom_script_id` (final: `custscript_th_dp_custom_script_id`) | Free-Form Text |
-| Enable Create/Delete Actions | `_th_dp_enable_actions` (final: `custscript_th_dp_enable_actions`) | Check Box |
-
-- For defaults, use:
-  - Dry Run = checked
-  - Force Load + Save Mode = unchecked
-  - Stop On Error = unchecked
-  - Max Rows = `0`
-  - Alias Prefix = `fieldid_`
-  - Query Custom Script ID = `th_data_patcher`
-  - Enable Create/Delete Actions = unchecked
+| Title | ID (what admin enters) | Type | Default Value |
+|---|---|---|---|
+| SuiteQL | `_th_dp_suiteql` (final: `custscript_th_dp_suiteql`) | Long Text | _(blank)_ |
+| Force Load + Save Mode | `_th_dp_force_loadsave` (final: `custscript_th_dp_force_loadsave`) | Check Box | unchecked |
+| Dry Run | `_th_dp_dry_run` (final: `custscript_th_dp_dry_run`) | Check Box | checked |
+| Stop On Error | `_th_dp_stop_on_error` (final: `custscript_th_dp_stop_on_error`) | Check Box | unchecked |
+| Max Rows | `_th_dp_max_rows` (final: `custscript_th_dp_max_rows`) | Free-Form Text | `0` |
+| Alias Prefix | `_th_dp_alias_prefix` (final: `custscript_th_dp_alias_prefix`) | Free-Form Text | `fieldid_` |
+| Query Custom Script ID | `_th_dp_custom_script_id` (final: `custscript_th_dp_custom_script_id`) | Free-Form Text | `th_data_patcher` |
+| Enable Create/Delete Actions | `_th_dp_enable_actions` (final: `custscript_th_dp_enable_actions`) | Check Box | unchecked |
 
 4. Create first deployment.
 - Deployment script ID:
@@ -60,7 +51,8 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
 - Status:
   - `Testing`
 - Deployed:
-  - `Checked` only when query has been dry-run validated.
+  - `Checked` so you can execute dry-run validation.
+  - Keep status `Testing` during dry-run and early verification.
 
 5. Configure and run first dry run.
 - Paste SuiteQL.
@@ -73,5 +65,5 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
 If behavior is not acceptable:
 
 1. Set deployment to `Not Deployed`.
-2. Remove schedule and audience access.
+2. Remove or pause the deployment schedule.
 3. Disable or delete deployment after review.
