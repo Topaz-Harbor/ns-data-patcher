@@ -11,7 +11,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   const DEFAULT_ALIAS_PREFIX = 'fieldid_';
   const DEFAULT_LINE_ALIAS_PREFIX = 'linefield_';
   const DEFAULT_ACTION = 'update';
-  const RUN_TOKEN_ALIAS = 'thdp_run_token';
   const META_CACHE_NAME = 'th_data_patcher_meta';
   const ABORT_CACHE_NAME = 'th_data_patcher_abort';
   const CACHE_TTL_SECONDS = 7200;
@@ -45,13 +44,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     };
   };
 
-  const buildQuerySignature = (config) => JSON.stringify({
-    suiteql: config.suiteql,
-    maxRows: config.maxRows
-  });
-
-  const createRunToken = () => `${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
-
   const readConfig = () => {
     const script = runtime.getCurrentScript();
     const suiteql = script.getParameter({ name: PARAMS.suiteql });
@@ -77,17 +69,24 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     return `${identity.scriptId}::${identity.deploymentId}::columns`;
   };
 
-  const getAbortCacheKey = (runToken) => {
+  const getAbortCacheKey = () => {
     const identity = getScriptIdentity();
-    return `${identity.scriptId}::${identity.deploymentId}::${runToken}::abort`;
+    return `${identity.scriptId}::${identity.deploymentId}::abort`;
   };
 
-  const setAbortFlag = (runToken, details) => {
-    if (!runToken) {
-      return;
+  const clearAbortFlag = () => {
+    const abortCache = getAbortCache();
+    const key = getAbortCacheKey();
+    try {
+      abortCache.remove({ key });
+    } catch (error) {
+      abortCache.put({ key, value: 'F', ttl: CACHE_TTL_SECONDS });
     }
+  };
+
+  const setAbortFlag = (details) => {
     getAbortCache().put({
-      key: getAbortCacheKey(runToken),
+      key: getAbortCacheKey(),
       value: JSON.stringify({
         aborted: true,
         timestamp: new Date().toISOString(),
@@ -97,21 +96,20 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     });
   };
 
-  const isAbortFlagSet = (runToken) => {
-    if (!runToken) {
+  const isAbortFlagSet = () => {
+    const raw = getAbortCache().get({ key: getAbortCacheKey() });
+    if (!raw || raw === 'F') {
       return false;
     }
-    const raw = getAbortCache().get({ key: getAbortCacheKey(runToken) });
-    return Boolean(raw);
+    return true;
   };
 
-  const buildInputQuery = (config, runToken) => {
-    const baseQuery = config.maxRows && config.maxRows > 0
-      ? `SELECT * FROM (${config.suiteql}) thdp_input WHERE ROWNUM <= ${config.maxRows}`
-      : config.suiteql;
+  const buildInputQuery = (config) => {
+    if (!config.maxRows || config.maxRows <= 0) {
+      return config.suiteql;
+    }
 
-    const escapedToken = runToken.replace(/'/g, "''");
-    return `SELECT q.*, '${escapedToken}' AS ${RUN_TOKEN_ALIAS} FROM (${baseQuery}) q`;
+    return `SELECT * FROM (${config.suiteql}) thdp_input WHERE ROWNUM <= ${config.maxRows}`;
   };
 
   const inferColumnNames = (inputQuery, customScriptId) => {
@@ -129,9 +127,10 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     return Object.keys(mappedRows[0]).map((columnName) => columnName.toLowerCase());
   };
 
-  const saveColumnMetadata = (config, columnNames) => {
+  const saveColumnMetadata = (config, inputQuery, columnNames) => {
     const payload = {
-      querySignature: buildQuerySignature(config),
+      suiteql: config.suiteql,
+      inputQuery,
       aliasPrefix: config.aliasPrefix.toLowerCase(),
       lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX,
       columnNames,
@@ -145,7 +144,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     });
   };
 
-  const loadColumnMetadata = (config) => {
+  const loadColumnMetadata = (config, inputQuery) => {
     const raw = getMetaCache().get({ key: getMetaCacheKey() });
     if (!raw) {
       return null;
@@ -153,7 +152,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
 
     try {
       const parsed = JSON.parse(raw);
-      if (parsed.querySignature !== buildQuerySignature(config)) {
+      if (parsed.suiteql !== config.suiteql || parsed.inputQuery !== inputQuery) {
         return null;
       }
       if (!Array.isArray(parsed.columnNames)) {
@@ -167,13 +166,13 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   };
 
   const ensureColumnNames = (config, inputQuery) => {
-    const cached = loadColumnMetadata(config);
+    const cached = loadColumnMetadata(config, inputQuery);
     if (cached && cached.length) {
       return cached;
     }
 
     const inferred = inferColumnNames(inputQuery, config.customScriptId);
-    saveColumnMetadata(config, inferred);
+    saveColumnMetadata(config, inputQuery, inferred);
     return inferred;
   };
 
@@ -284,16 +283,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   };
 
   const deleteRecord = (recordType, recordId) => record.delete({ type: recordType, id: recordId });
-  const buildUpdateReduceKey = (runToken, recordType, recordId) => `upd::${runToken}::${recordType}::${recordId}`;
+  const buildUpdateReduceKey = (recordType, recordId) => `upd::${recordType}::${recordId}`;
   const isUpdateReduceKey = (key) => key.startsWith('upd::');
-  const parseUpdateReduceKey = (key) => {
-    const parts = key.split('::');
-    return {
-      runToken: parts[1] || '',
-      recordType: parts[2] || '',
-      recordId: parts[3] || ''
-    };
-  };
 
   const sortDeferredOperations = (operations) => operations.sort((left, right) => {
     const leftSeq = left.operationSequence;
@@ -317,10 +308,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       throw Error('Missing required SuiteQL parameter: custscript_th_dp_suiteql');
     }
 
-    const runToken = createRunToken();
-    const inputQuery = buildInputQuery(config, runToken);
+    clearAbortFlag();
+
+    const inputQuery = buildInputQuery(config);
     const columnNames = inferColumnNames(inputQuery, config.customScriptId);
-    saveColumnMetadata(config, columnNames);
+    saveColumnMetadata(config, inputQuery, columnNames);
 
     log.audit({
       title: 'Data patch input configured',
@@ -331,7 +323,6 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX,
         nonUpdateActionsEnabled: config.enableActions,
         stopOnError: config.stopOnError,
-        runToken,
         maxRows: config.maxRows,
         inferredColumns: columnNames
       }
@@ -345,7 +336,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
 
   const map = (context) => {
     const config = readConfig();
-    const inputQuery = buildInputQuery(config, 'map_probe');
+    const inputQuery = buildInputQuery(config);
     const columnNames = ensureColumnNames(config, inputQuery);
     const parsed = JSON.parse(context.value);
     const valuesArray = Array.isArray(parsed.values) ? parsed.values : [];
@@ -354,14 +345,12 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       throw Error('Unable to resolve SuiteQL column names for map processing.');
     }
 
-    const row = materializeRow(columnNames, valuesArray);
-    const runToken = row[RUN_TOKEN_ALIAS] ? row[RUN_TOKEN_ALIAS].toString() : '';
-
-    if (config.stopOnError && isAbortFlagSet(runToken)) {
+    if (config.stopOnError && isAbortFlagSet()) {
       context.write({ key: 'aborted', value: '1' });
       return;
     }
 
+    const row = materializeRow(columnNames, valuesArray);
     const action = normalizeAction(row.action);
     const recordType = row.recordtype;
     const recordId = row.recordid;
@@ -425,9 +414,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
 
       if (needsDeferredLoadSave) {
         context.write({
-          key: buildUpdateReduceKey(runToken, recordType, recordId),
+          key: buildUpdateReduceKey(recordType, recordId),
           value: JSON.stringify({
-            runToken,
             recordType,
             recordId,
             bodyValues,
@@ -440,7 +428,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       }
 
       try {
-        if (config.stopOnError && isAbortFlagSet(runToken)) {
+        if (config.stopOnError && isAbortFlagSet()) {
           context.write({ key: 'aborted', value: '1' });
           return;
         }
@@ -477,7 +465,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
-          setAbortFlag(runToken, { stage: 'map-update', recordType, recordId, errorName: error.name });
+          setAbortFlag({ stage: 'map-update', recordType, recordId, errorName: error.name });
         }
       }
       return;
@@ -488,7 +476,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         log.error({ title: 'Create does not support linefield_* aliases', details: { row } });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
-          setAbortFlag(runToken, { stage: 'map-create-validate', recordType, errorName: 'INVALID_LINE_ALIAS' });
+          setAbortFlag({ stage: 'map-create-validate', recordType, errorName: 'INVALID_LINE_ALIAS' });
         }
         return;
       }
@@ -506,7 +494,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       }
 
       try {
-        if (config.stopOnError && isAbortFlagSet(runToken)) {
+        if (config.stopOnError && isAbortFlagSet()) {
           context.write({ key: 'aborted', value: '1' });
           return;
         }
@@ -521,7 +509,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
-          setAbortFlag(runToken, { stage: 'map-create', recordType, errorName: error.name });
+          setAbortFlag({ stage: 'map-create', recordType, errorName: error.name });
         }
       }
       return;
@@ -541,7 +529,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       }
 
       try {
-        if (config.stopOnError && isAbortFlagSet(runToken)) {
+        if (config.stopOnError && isAbortFlagSet()) {
           context.write({ key: 'aborted', value: '1' });
           return;
         }
@@ -556,7 +544,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
-          setAbortFlag(runToken, { stage: 'map-delete', recordType, recordId, errorName: error.name });
+          setAbortFlag({ stage: 'map-delete', recordType, recordId, errorName: error.name });
         }
       }
       return;
@@ -571,10 +559,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       const config = readConfig();
       const operations = context.values.map((value) => JSON.parse(value));
       const sortedOperations = sortDeferredOperations(operations);
-      const keyParts = parseUpdateReduceKey(context.key);
-      const runToken = keyParts.runToken;
 
-      if (config.stopOnError && isAbortFlagSet(runToken)) {
+      if (config.stopOnError && isAbortFlagSet()) {
         context.write({ key: 'aborted', value: String(sortedOperations.length) });
         return;
       }
@@ -612,7 +598,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
           }
         });
 
-        if (config.stopOnError && isAbortFlagSet(runToken)) {
+        if (config.stopOnError && isAbortFlagSet()) {
           context.write({ key: 'aborted', value: String(sortedOperations.length) });
           return;
         }
@@ -644,7 +630,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         });
         context.write({ key: 'failed', value: String(sortedOperations.length) });
         if (config.stopOnError) {
-          setAbortFlag(runToken, { stage: 'reduce-update', recordType: first.recordType, recordId: first.recordId, errorName: error.name });
+          setAbortFlag({ stage: 'reduce-update', recordType: first.recordType, recordId: first.recordId, errorName: error.name });
         }
       }
       return;

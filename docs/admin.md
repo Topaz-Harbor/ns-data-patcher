@@ -116,4 +116,4 @@ Load/save updates are grouped and applied in `reduce()` once per record to avoid
 - Ensure deterministic `ORDER BY` for stable and repeatable query runs.
 - For large remediations, use capped runs and staggered schedules.
 - `Stop On Error` uses shared cache signaling; treat it as cooperative abort, not an instantaneous hard stop.
-- Abort signaling keys are scoped to a per-run token to prevent cross-run collisions on the same deployment.
+- Abort signaling is deployment-scoped and reset at the start of each run.
