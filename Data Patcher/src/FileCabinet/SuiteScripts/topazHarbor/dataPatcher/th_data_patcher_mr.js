@@ -327,24 +327,31 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       reduceErrors: 0
     };
 
-    summary.output.iterator().each((key, value) => {
+    const iterate = (iteratorHolder, callback) => {
+      if (!iteratorHolder || typeof iteratorHolder.iterator !== 'function') {
+        return;
+      }
+      iteratorHolder.iterator().each((key, value) => callback(key, value));
+    };
+
+    iterate(summary.output, (key, value) => {
       totals[key] = parseInt(value, 10) || 0;
       return true;
     });
 
-    summary.inputSummary.errors.iterator().each((key, error) => {
+    iterate(summary.inputSummary && summary.inputSummary.errors, (key, error) => {
       totals.inputErrors += 1;
       log.error({ title: `Input error for key ${key}`, details: error });
       return true;
     });
 
-    summary.mapSummary.errors.iterator().each((key, error) => {
+    iterate(summary.mapSummary && summary.mapSummary.errors, (key, error) => {
       totals.mapErrors += 1;
       log.error({ title: `Map error for key ${key}`, details: error });
       return true;
     });
 
-    summary.reduceSummary.errors.iterator().each((key, error) => {
+    iterate(summary.reduceSummary && summary.reduceSummary.errors, (key, error) => {
       totals.reduceErrors += 1;
       log.error({ title: `Reduce error for key ${key}`, details: error });
       return true;
