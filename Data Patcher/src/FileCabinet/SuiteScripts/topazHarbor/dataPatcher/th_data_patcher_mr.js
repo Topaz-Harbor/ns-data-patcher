@@ -7,10 +7,12 @@
  * @author Stephen Lemp <stephen@topazharbor.com>
  * @license MIT
  */
-define(['N/log', 'N/query', 'N/record', 'N/runtime'], (log, query, record, runtime) => {
+define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, query, record, runtime) => {
   const DEFAULT_ALIAS_PREFIX = 'fieldid_';
   const DEFAULT_PAGE_SIZE = 100;
   const MAX_PAGE_SIZE = 1000;
+  const CACHE_NAME = 'th_data_patcher_meta';
+  const CACHE_TTL_SECONDS = 7200;
 
   const PARAMS = {
     suiteql: 'custscript_th_dp_suiteql',
@@ -57,12 +59,90 @@ define(['N/log', 'N/query', 'N/record', 'N/runtime'], (log, query, record, runti
     };
   };
 
-  const normalizeRow = (row) => {
-    const normalized = {};
-    Object.keys(row).forEach((key) => {
-      normalized[key.toLowerCase()] = row[key];
+  const getMetaCache = () => cache.getCache({ name: CACHE_NAME, scope: cache.Scope.PRIVATE });
+
+  const getCacheKey = () => {
+    const script = runtime.getCurrentScript();
+    return `${script.id || 'customscript_th_data_patcher'}::${script.deploymentId || 'customdeploy_th_data_patcher_default'}::columns`;
+  };
+
+  const buildInputQuery = (config) => {
+    if (!config.maxRows || config.maxRows <= 0) {
+      return config.suiteql;
+    }
+
+    return `SELECT * FROM (${config.suiteql}) thdp_input WHERE ROWNUM <= ${config.maxRows}`;
+  };
+
+  const inferColumnNames = (inputQuery, customScriptId) => {
+    const probeQuery = `SELECT * FROM (${inputQuery}) thdp_probe WHERE ROWNUM <= 1`;
+    const resultSet = query.runSuiteQL({
+      query: probeQuery,
+      customScriptId: customScriptId || undefined
     });
-    return normalized;
+    const mappedRows = resultSet.asMappedResults();
+
+    if (!mappedRows.length) {
+      return [];
+    }
+
+    return Object.keys(mappedRows[0]).map((columnName) => columnName.toLowerCase());
+  };
+
+  const saveColumnMetadata = (config, inputQuery, columnNames) => {
+    const payload = {
+      suiteql: config.suiteql,
+      inputQuery,
+      aliasPrefix: config.aliasPrefix.toLowerCase(),
+      columnNames,
+      savedAt: new Date().toISOString()
+    };
+
+    getMetaCache().put({
+      key: getCacheKey(),
+      value: JSON.stringify(payload),
+      ttl: CACHE_TTL_SECONDS
+    });
+  };
+
+  const loadColumnMetadata = (config, inputQuery) => {
+    const raw = getMetaCache().get({ key: getCacheKey() });
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.suiteql !== config.suiteql || parsed.inputQuery !== inputQuery) {
+        return null;
+      }
+      if (!Array.isArray(parsed.columnNames)) {
+        return null;
+      }
+      return parsed.columnNames;
+    } catch (error) {
+      log.error({ title: 'Invalid cache payload', details: error.message });
+      return null;
+    }
+  };
+
+  const ensureColumnNames = (config, inputQuery) => {
+    const cached = loadColumnMetadata(config, inputQuery);
+    if (cached && cached.length) {
+      return cached;
+    }
+
+    const inferred = inferColumnNames(inputQuery, config.customScriptId);
+    saveColumnMetadata(config, inputQuery, inferred);
+    return inferred;
+  };
+
+  const materializeRow = (columnNames, valuesArray) => {
+    const row = {};
+    for (let index = 0; index < columnNames.length; index += 1) {
+      row[columnNames[index]] = valuesArray[index];
+    }
+    return row;
   };
 
   const buildUpdateValues = (row, aliasPrefix) => {
@@ -122,90 +202,71 @@ define(['N/log', 'N/query', 'N/record', 'N/runtime'], (log, query, record, runti
       throw Error('Missing required SuiteQL parameter: custscript_th_dp_suiteql');
     }
 
-    const inputRows = [];
-    const skipped = {
-      missingRecordColumns: 0,
-      noUpdateAliases: 0
-    };
-
-    const pagedQuery = query.runSuiteQLPaged({
-      query: config.suiteql,
-      pageSize: config.pageSize,
-      customScriptId: config.customScriptId || undefined
-    });
-
-    for (let pageIndex = 0; pageIndex < pagedQuery.pageRanges.length; pageIndex += 1) {
-      if (config.maxRows && inputRows.length >= config.maxRows) {
-        break;
-      }
-
-      const page = pagedQuery.fetch({ index: pageIndex });
-      const rows = page.data.asMappedResults();
-
-      for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-        if (config.maxRows && inputRows.length >= config.maxRows) {
-          break;
-        }
-
-        const rawRow = rows[rowIndex];
-        const row = normalizeRow(rawRow);
-        const recordType = row.recordtype;
-        const recordId = row.recordid;
-
-        if (!recordType || !recordId) {
-          skipped.missingRecordColumns += 1;
-          log.error({
-            title: 'Skipped row: required columns missing',
-            details: { row: rawRow }
-          });
-          continue;
-        }
-
-        const values = buildUpdateValues(row, config.aliasPrefix);
-        if (!Object.keys(values).length) {
-          skipped.noUpdateAliases += 1;
-          log.audit({
-            title: 'Skipped row: no update aliases found',
-            details: { recordType, recordId, aliasPrefix: config.aliasPrefix }
-          });
-          continue;
-        }
-
-        inputRows.push({
-          recordType,
-          recordId,
-          values
-        });
-      }
-    }
+    const inputQuery = buildInputQuery(config);
+    const columnNames = inferColumnNames(inputQuery, config.customScriptId);
+    saveColumnMetadata(config, inputQuery, columnNames);
 
     log.audit({
-      title: 'Data patch input summary',
+      title: 'Data patch input configured',
       details: {
-        stagedRows: inputRows.length,
-        skipped,
         mode: config.forceLoadSave ? 'load-save' : 'submit-fields',
         dryRun: config.dryRun,
         aliasPrefix: config.aliasPrefix,
         maxRows: config.maxRows,
-        pageSize: config.pageSize
+        pageSize: config.pageSize,
+        inferredColumns: columnNames
       }
     });
 
-    return inputRows;
+    return {
+      type: 'suiteql',
+      query: inputQuery
+    };
   };
 
   const map = (context) => {
     const config = readConfig();
-    const input = JSON.parse(context.value);
+    const inputQuery = buildInputQuery(config);
+    const columnNames = ensureColumnNames(config, inputQuery);
+    const parsed = JSON.parse(context.value);
+    const valuesArray = Array.isArray(parsed.values) ? parsed.values : [];
+
+    if (!columnNames.length || columnNames.length < valuesArray.length) {
+      throw Error('Unable to resolve SuiteQL column names for map processing.');
+    }
+
+    const row = materializeRow(columnNames, valuesArray);
+    const recordType = row.recordtype;
+    const recordId = row.recordid;
+
+    if (!recordType || !recordId) {
+      log.error({
+        title: 'Skipped row: required columns missing',
+        details: { row }
+      });
+      context.write({ key: 'skipped', value: '1' });
+      return;
+    }
+
+    const updateValues = buildUpdateValues(row, config.aliasPrefix);
+    const fieldIds = Object.keys(updateValues);
+
+    if (!fieldIds.length) {
+      log.audit({
+        title: 'Skipped row: no update aliases found',
+        details: { recordType, recordId, aliasPrefix: config.aliasPrefix }
+      });
+      context.write({ key: 'skipped', value: '1' });
+      return;
+    }
 
     if (config.dryRun) {
       log.audit({
         title: 'Dry run patch preview',
         details: {
-          recordType: input.recordType,
-          recordId: input.recordId,
-          values: input.values
+          recordType,
+          recordId,
+          values: updateValues
         }
       });
       context.write({ key: 'previewed', value: '1' });
@@ -214,18 +275,18 @@ define(['N/log', 'N/query', 'N/record', 'N/runtime'], (log, query, record, runti
 
     try {
       if (config.forceLoadSave) {
-        applyByLoadSave(input.recordType, input.recordId, input.values);
+        applyByLoadSave(recordType, recordId, updateValues);
       } else {
-        applyBySubmitFields(input.recordType, input.recordId, input.values);
+        applyBySubmitFields(recordType, recordId, updateValues);
       }
 
       log.audit({
         title: 'Patched record',
         details: {
-          recordType: input.recordType,
-          recordId: input.recordId,
+          recordType,
+          recordId,
           mode: config.forceLoadSave ? 'load-save' : 'submit-fields',
-          fieldIds: Object.keys(input.values)
+          fieldIds
         }
       });
       context.write({ key: 'patched', value: '1' });
@@ -233,9 +294,9 @@ define(['N/log', 'N/query', 'N/record', 'N/runtime'], (log, query, record, runti
       log.error({
         title: 'Patch failure',
         details: {
-          recordType: input.recordType,
-          recordId: input.recordId,
-          fieldIds: Object.keys(input.values),
+          recordType,
+          recordId,
+          fieldIds,
           errorName: error.name,
           errorMessage: error.message
         }
@@ -260,6 +321,7 @@ define(['N/log', 'N/query', 'N/record', 'N/runtime'], (log, query, record, runti
       patched: 0,
       previewed: 0,
       failed: 0,
+      skipped: 0,
       inputErrors: 0,
       mapErrors: 0,
       reduceErrors: 0

@@ -10,7 +10,7 @@
     <scriptcustomfield scriptid="custscript_th_dp_suiteql">
       <accesslevel>2</accesslevel>
       <fieldtype>CLOBTEXT</fieldtype>
-      <ismandatory>T</ismandatory>
+      <ismandatory>F</ismandatory>
       <label>SuiteQL</label>
       <storevalue>T</storevalue>
       <description>SuiteQL query used by this deployment. Must return recordtype, recordid, and fieldid_* aliases.</description>
