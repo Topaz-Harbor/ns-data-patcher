@@ -18,17 +18,24 @@ This utility is part of the **Topaz Harbor Admin Utilities** lineup.
 
 ## Core Paradigm
 
-Each deployment run executes one SuiteQL statement. The query must return:
+Each deployment run executes one SuiteQL statement. The script reads each result row and executes an action.
 
-- `recordtype`
-- `recordid`
-- one or more update columns aliased as `fieldid_<actual_field_id>`
+Required columns by action:
 
-Example alias:
+- `recordtype` for all actions
+- `recordid` for `update` and `delete`
+- `recordid` not required for `create`
 
-- `fieldid_custbody_target_date`
+Action and alias conventions:
 
-The script reads each result row and updates the target record using the alias mapping.
+- `action` (`update` default, optional `create`, `delete`)
+- body fields: `fieldid_<fieldid>`
+- sublist fields: `linefield_<fieldid>`
+
+For sublist updates (`linefield_` aliases), include:
+
+- `sublistid`
+- one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
 
 ## Admin-Friendly Scheduling Model
 

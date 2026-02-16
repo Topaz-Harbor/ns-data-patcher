@@ -106,5 +106,5 @@ Create/delete actions ignore Inline Edit mode and run through record create/dele
 - Inline Edit (`record.submitFields`) updates body fields only.
 - Sublist line updates require `record.load` + `record.save`.
 - Create/delete actions are deployment-gated by `Enable Create/Delete Actions`.
-- Ensure deterministic `ORDER BY` for paged SuiteQL.
+- Ensure deterministic `ORDER BY` for stable and repeatable query runs.
 - For large remediations, use capped runs and staggered schedules.
