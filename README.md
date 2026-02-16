@@ -37,7 +37,7 @@ Action and alias conventions:
 For sublist updates (`linefield_` aliases), include:
 
 - `sublistid`
-- one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
+- `lineuniquekey`
 
 ## Advanced: Ordered Operations
 

@@ -29,7 +29,7 @@ Your SuiteQL must return these columns:
 - optional sublist columns aliased as `linefield_<fieldid>` for line fields
 - when using sublist aliases, include:
   - `sublistid`
-  - one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
+  - `lineuniquekey`
 - optional `action` column:
   - `update` (default if omitted)
   - `create` (requires non-update actions enabled)
@@ -67,7 +67,7 @@ SELECT
   'salesorder' AS recordtype,
   12345 AS recordid,
   'item' AS sublistid,
-  1 AS linenumber,
+  '22019073' AS lineuniquekey,
   10 AS operationsequence,
   'A' AS linefield_custcol_stage_marker
 FROM dual
@@ -77,7 +77,7 @@ SELECT
   'salesorder' AS recordtype,
   12345 AS recordid,
   'item' AS sublistid,
-  1 AS linenumber,
+  '22019073' AS lineuniquekey,
   20 AS operationsequence,
   'B' AS linefield_custcol_stage_marker
 FROM dual
@@ -87,14 +87,16 @@ In this example, final value is `B` because sequence `20` is applied after `10`.
 
 ## Parameter Reference
 
-- `SuiteQL` (required): query text used by the job.
-- `Force Load + Save Mode`: use `record.load` + `record.save` instead of Inline Edit (`record.submitFields`).
-- `Force Load + Save Mode` note: this exists for edge cases where Inline Edit does not work even when no clear root cause is identified.
-- `Dry Run`: logs intended updates without writing changes.
-- `Stop On Error`: best-effort global abort. First failure sets a shared cache abort flag and later operations skip when they detect it.
-- `Max Rows`: optional row cap per run (0 means uncapped).
-- `Alias Prefix`: default `fieldid_`.
-- `Enable Create/Delete Actions`: required to allow `action=create` or `action=delete`.
+| Name | Use | Notes | Frequency |
+|---|---|---|---|
+| `SuiteQL` | Defines which rows and values to process. | Required for every job. | Often |
+| `Dry Run` | Preview changes without writing data. | Keep enabled for first run in each environment. | Often |
+| `Max Rows` | Limits rows per execution. | Use for staged rollouts and risk control. `0` means uncapped. | Often |
+| `Stop On Error` | Tries to halt processing after first error. | Best-effort in parallel processing; some in-flight writes may still finish. | Sometimes |
+| `Force Load + Save Mode` | Forces body updates through `record.load` + `record.save`. | Use when Inline Edit (`record.submitFields`) fails in edge cases. | Sometimes |
+| `Enable Create/Delete Actions` | Allows `action=create` and `action=delete`. | Leave off unless job intentionally creates or deletes records. | Sometimes |
+| `Alias Prefix` | Controls body-field alias prefix parsing. | Default `fieldid_`; change only if query convention differs. | Rarely |
+| `Query Custom Script ID` | Adds a query diagnostic ownership tag. | Optional advanced tuning/ownership tag. | Rarely |
 
 ## Advanced: Query Custom Script ID
 

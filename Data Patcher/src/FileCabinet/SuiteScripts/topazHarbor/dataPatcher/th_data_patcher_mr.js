@@ -211,28 +211,11 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
 
   const getLineLocator = (row) => ({
     sublistId: row.sublistid ? row.sublistid.toString() : '',
-    lineUniqueKey: row.lineuniquekey === undefined || row.lineuniquekey === null ? '' : row.lineuniquekey.toString(),
-    lineNumber: toIntegerOrNull(row.linenumber),
-    lineIndex: toIntegerOrNull(row.lineindex)
+    lineUniqueKey: row.lineuniquekey === undefined || row.lineuniquekey === null ? '' : row.lineuniquekey.toString()
   });
 
   const resolveLineIndex = (loadedRecord, locator) => {
     const lineCount = loadedRecord.getLineCount({ sublistId: locator.sublistId });
-
-    if (locator.lineIndex !== null) {
-      if (locator.lineIndex < 0 || locator.lineIndex >= lineCount) {
-        throw Error(`Line index ${locator.lineIndex} is out of range for sublist ${locator.sublistId}.`);
-      }
-      return locator.lineIndex;
-    }
-
-    if (locator.lineNumber !== null) {
-      const zeroBased = locator.lineNumber - 1;
-      if (zeroBased < 0 || zeroBased >= lineCount) {
-        throw Error(`Line number ${locator.lineNumber} is out of range for sublist ${locator.sublistId}.`);
-      }
-      return zeroBased;
-    }
 
     if (locator.lineUniqueKey) {
       for (let index = 0; index < lineCount; index += 1) {
@@ -248,7 +231,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       throw Error(`No line matched lineuniquekey ${locator.lineUniqueKey} on sublist ${locator.sublistId}.`);
     }
 
-    throw Error('Sublist updates require lineindex, linenumber, or lineuniquekey.');
+    throw Error('Sublist updates require lineuniquekey.');
   };
 
   const applyBySubmitFields = (recordType, recordId, values) => {
