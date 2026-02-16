@@ -42,7 +42,8 @@ ORDER BY t.id
 ## Parameter Reference
 
 - `SuiteQL` (required): query text used by the job.
-- `Force Load + Save Mode`: use `record.load` + `record.save` instead of `submitFields`.
+- `Force Load + Save Mode`: use `record.load` + `record.save` instead of Inline Edit (`record.submitFields`).
+- `Force Load + Save Mode` note: this exists for edge cases where Inline Edit does not work even when no clear root cause is identified.
 - `Dry Run`: logs intended updates without writing changes.
 - `Stop On Error`: fail immediately on first record error.
 - `Max Rows`: optional row cap per run (0 means uncapped).
@@ -62,9 +63,9 @@ ORDER BY t.id
 
 ## Update Mode Guidance
 
-Use default `submitFields` mode when possible because it is lighter and faster.
+Use default Inline Edit mode (`record.submitFields`) when possible because it is lighter and faster.
 
-Use `Force Load + Save` only when update behavior requires full load/save semantics.
+Use `Force Load + Save` only when update behavior requires full load/save semantics or when Inline Edit fails for unexplained edge-case behavior.
 
 ## Troubleshooting
 
@@ -84,6 +85,6 @@ Use `Force Load + Save` only when update behavior requires full load/save semant
 
 ## Governance Notes
 
-- `record.submitFields` updates body fields only.
+- Inline Edit (`record.submitFields`) updates body fields only.
 - Ensure deterministic `ORDER BY` for paged SuiteQL.
 - For large remediations, use capped runs and staggered schedules.
