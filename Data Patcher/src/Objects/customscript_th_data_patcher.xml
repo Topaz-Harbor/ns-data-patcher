@@ -13,8 +13,8 @@
       <ismandatory>F</ismandatory>
       <label>SuiteQL</label>
       <storevalue>T</storevalue>
-      <description>SuiteQL query used by this deployment. Must return recordtype, recordid, and fieldid_* aliases.</description>
-      <help>Required. Include deterministic ORDER BY and aliases fieldid_&lt;fieldid&gt; for body updates.</help>
+      <description>SuiteQL query used by this deployment. Return recordtype plus aliases for body/sublist/action processing.</description>
+      <help>Required. Include deterministic ORDER BY. Use fieldid_&lt;fieldid&gt;, optional linefield_&lt;fieldid&gt;, and optional action column.</help>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_force_loadsave">
       <accesslevel>2</accesslevel>
@@ -71,6 +71,14 @@
       <storevalue>T</storevalue>
       <defaultvalue>th_data_patcher</defaultvalue>
       <description>Optional query customScriptId used by runSuiteQLPaged diagnostics.</description>
+    </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_th_dp_enable_actions">
+      <accesslevel>2</accesslevel>
+      <fieldtype>CHECKBOX</fieldtype>
+      <label>Enable Create/Delete Actions</label>
+      <storevalue>T</storevalue>
+      <defaultchecked>F</defaultchecked>
+      <description>If checked, action=create and action=delete rows are allowed.</description>
     </scriptcustomfield>
   </scriptcustomfields>
   <scriptdeployments>

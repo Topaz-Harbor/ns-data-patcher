@@ -1,6 +1,6 @@
 /**
  * Data Patcher Map/Reduce Script
- * Runs a parameterized SuiteQL query and applies body/sublist updates for each result row.
+ * Runs a parameterized SuiteQL query and applies update/create/delete actions.
  *
  * @NApiVersion 2.1
  * @NScriptType MapReduceScript
@@ -10,6 +10,7 @@
 define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, query, record, runtime) => {
   const DEFAULT_ALIAS_PREFIX = 'fieldid_';
   const DEFAULT_LINE_ALIAS_PREFIX = 'linefield_';
+  const DEFAULT_ACTION = 'update';
   const DEFAULT_PAGE_SIZE = 100;
   const MAX_PAGE_SIZE = 1000;
   const CACHE_NAME = 'th_data_patcher_meta';
@@ -23,7 +24,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     maxRows: 'custscript_th_dp_max_rows',
     pageSize: 'custscript_th_dp_page_size',
     aliasPrefix: 'custscript_th_dp_alias_prefix',
-    customScriptId: 'custscript_th_dp_custom_script_id'
+    customScriptId: 'custscript_th_dp_custom_script_id',
+    enableActions: 'custscript_th_dp_enable_actions'
   };
 
   const toBoolean = (value) => value === true || value === 'T' || value === 'true' || value === '1';
@@ -56,7 +58,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       maxRows: toIntegerOrNull(script.getParameter({ name: PARAMS.maxRows })),
       pageSize: normalizePageSize(toIntegerOrNull(script.getParameter({ name: PARAMS.pageSize }))),
       aliasPrefix: (script.getParameter({ name: PARAMS.aliasPrefix }) || DEFAULT_ALIAS_PREFIX).toString(),
-      customScriptId: customScriptIdRaw ? customScriptIdRaw.toString().trim() : ''
+      customScriptId: customScriptIdRaw ? customScriptIdRaw.toString().trim() : '',
+      enableActions: toBoolean(script.getParameter({ name: PARAMS.enableActions }))
     };
   };
 
@@ -163,6 +166,13 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     });
 
     return updates;
+  };
+
+  const normalizeAction = (rawValue) => {
+    if (rawValue === undefined || rawValue === null || rawValue === '') {
+      return DEFAULT_ACTION;
+    }
+    return rawValue.toString().trim().toLowerCase();
   };
 
   const getLineLocator = (row) => ({
@@ -279,6 +289,27 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     };
   };
 
+  const createRecord = (recordType, bodyValues) => {
+    const createdRecord = record.create({
+      type: recordType,
+      isDynamic: false
+    });
+
+    Object.keys(bodyValues).forEach((fieldId) => {
+      createdRecord.setValue({
+        fieldId,
+        value: bodyValues[fieldId]
+      });
+    });
+
+    return createdRecord.save({
+      enableSourcing: false,
+      ignoreMandatoryFields: true
+    });
+  };
+
+  const deleteRecord = (recordType, recordId) => record.delete({ type: recordType, id: recordId });
+
   const getInputData = () => {
     const config = readConfig();
 
@@ -297,6 +328,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         dryRun: config.dryRun,
         aliasPrefix: config.aliasPrefix,
         lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX,
+        nonUpdateActionsEnabled: config.enableActions,
         maxRows: config.maxRows,
         pageSize: config.pageSize,
         inferredColumns: columnNames
@@ -321,91 +353,181 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     }
 
     const row = materializeRow(columnNames, valuesArray);
+    const action = normalizeAction(row.action);
     const recordType = row.recordtype;
     const recordId = row.recordid;
-
-    if (!recordType || !recordId) {
-      log.error({
-        title: 'Skipped row: required columns missing',
-        details: { row }
-      });
-      context.write({ key: 'skipped', value: '1' });
-      return;
-    }
-
     const bodyValues = buildAliasValues(row, config.aliasPrefix);
     const lineValues = buildAliasValues(row, DEFAULT_LINE_ALIAS_PREFIX);
     const bodyFieldIds = Object.keys(bodyValues);
     const lineFieldIds = Object.keys(lineValues);
 
-    if (!bodyFieldIds.length && !lineFieldIds.length) {
-      log.audit({
-        title: 'Skipped row: no update aliases found',
-        details: { recordType, recordId, aliasPrefix: config.aliasPrefix, lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX }
+    if (!recordType) {
+      log.error({ title: 'Skipped row: recordtype is required', details: { row, action } });
+      context.write({ key: 'skipped', value: '1' });
+      return;
+    }
+
+    if (action !== 'update' && !config.enableActions) {
+      log.error({
+        title: 'Skipped row: non-update action is disabled',
+        details: { action, recordType, recordId }
       });
       context.write({ key: 'skipped', value: '1' });
       return;
     }
 
-    const effectiveMode = lineFieldIds.length ? 'sublist-load-save' : (config.forceLoadSave ? 'load-save' : 'inline-edit');
+    if (action === 'update') {
+      if (!recordId) {
+        log.error({ title: 'Skipped row: recordid is required for update', details: { row } });
+        context.write({ key: 'skipped', value: '1' });
+        return;
+      }
 
-    if (config.dryRun) {
-      log.audit({
-        title: 'Dry run patch preview',
-        details: {
-          recordType,
-          recordId,
-          mode: effectiveMode,
-          bodyValues,
-          lineValues,
-          sublistId: row.sublistid || ''
+      if (!bodyFieldIds.length && !lineFieldIds.length) {
+        log.audit({
+          title: 'Skipped row: no update aliases found',
+          details: { recordType, recordId, aliasPrefix: config.aliasPrefix, lineAliasPrefix: DEFAULT_LINE_ALIAS_PREFIX }
+        });
+        context.write({ key: 'skipped', value: '1' });
+        return;
+      }
+
+      const effectiveMode = lineFieldIds.length ? 'sublist-load-save' : (config.forceLoadSave ? 'load-save' : 'inline-edit');
+
+      if (config.dryRun) {
+        log.audit({
+          title: 'Dry run patch preview',
+          details: {
+            action,
+            recordType,
+            recordId,
+            mode: effectiveMode,
+            bodyValues,
+            lineValues,
+            sublistId: row.sublistid || ''
+          }
+        });
+        context.write({ key: 'previewed', value: '1' });
+        return;
+      }
+
+      try {
+        let sublistResult = null;
+        if (lineFieldIds.length) {
+          sublistResult = applySublistUpdate(recordType, recordId, row, bodyValues, lineValues);
+        } else if (config.forceLoadSave) {
+          applyByLoadSave(recordType, recordId, bodyValues);
+        } else {
+          applyBySubmitFields(recordType, recordId, bodyValues);
         }
-      });
-      context.write({ key: 'previewed', value: '1' });
+
+        log.audit({
+          title: 'Patched record',
+          details: {
+            action,
+            recordType,
+            recordId,
+            mode: effectiveMode,
+            bodyFieldIds,
+            lineFieldIds,
+            sublistId: sublistResult ? sublistResult.sublistId : '',
+            lineIndex: sublistResult ? sublistResult.lineIndex : ''
+          }
+        });
+        context.write({ key: 'patched', value: '1' });
+      } catch (error) {
+        log.error({
+          title: 'Patch failure',
+          details: {
+            action,
+            recordType,
+            recordId,
+            mode: effectiveMode,
+            bodyFieldIds,
+            lineFieldIds,
+            errorName: error.name,
+            errorMessage: error.message
+          }
+        });
+        context.write({ key: 'failed', value: '1' });
+        if (config.stopOnError) {
+          throw error;
+        }
+      }
       return;
     }
 
-    try {
-      let sublistResult = null;
+    if (action === 'create') {
       if (lineFieldIds.length) {
-        sublistResult = applySublistUpdate(recordType, recordId, row, bodyValues, lineValues);
-      } else if (config.forceLoadSave) {
-        applyByLoadSave(recordType, recordId, bodyValues);
-      } else {
-        applyBySubmitFields(recordType, recordId, bodyValues);
+        log.error({ title: 'Create does not support linefield_* aliases', details: { row } });
+        context.write({ key: 'failed', value: '1' });
+        if (config.stopOnError) {
+          throw Error('Create does not support linefield_* aliases.');
+        }
+        return;
       }
 
-      log.audit({
-        title: 'Patched record',
-        details: {
-          recordType,
-          recordId,
-          mode: effectiveMode,
-          bodyFieldIds,
-          lineFieldIds,
-          sublistId: sublistResult ? sublistResult.sublistId : '',
-          lineIndex: sublistResult ? sublistResult.lineIndex : ''
-        }
-      });
-      context.write({ key: 'patched', value: '1' });
-    } catch (error) {
-      log.error({
-        title: 'Patch failure',
-        details: {
-          recordType,
-          recordId,
-          mode: effectiveMode,
-          bodyFieldIds,
-          lineFieldIds,
-          errorName: error.name,
-          errorMessage: error.message
-        }
-      });
-      context.write({ key: 'failed', value: '1' });
-      if (config.stopOnError) {
-        throw error;
+      if (!bodyFieldIds.length) {
+        log.error({ title: 'Skipped row: create requires at least one fieldid_* value', details: { row } });
+        context.write({ key: 'skipped', value: '1' });
+        return;
       }
+
+      if (config.dryRun) {
+        log.audit({ title: 'Dry run create preview', details: { action, recordType, values: bodyValues } });
+        context.write({ key: 'previewed', value: '1' });
+        return;
+      }
+
+      try {
+        const newId = createRecord(recordType, bodyValues);
+        log.audit({ title: 'Created record', details: { action, recordType, newId, bodyFieldIds } });
+        context.write({ key: 'created', value: '1' });
+      } catch (error) {
+        log.error({
+          title: 'Create failure',
+          details: { action, recordType, bodyFieldIds, errorName: error.name, errorMessage: error.message }
+        });
+        context.write({ key: 'failed', value: '1' });
+        if (config.stopOnError) {
+          throw error;
+        }
+      }
+      return;
     }
+
+    if (action === 'delete') {
+      if (!recordId) {
+        log.error({ title: 'Skipped row: recordid is required for delete', details: { row } });
+        context.write({ key: 'skipped', value: '1' });
+        return;
+      }
+
+      if (config.dryRun) {
+        log.audit({ title: 'Dry run delete preview', details: { action, recordType, recordId } });
+        context.write({ key: 'previewed', value: '1' });
+        return;
+      }
+
+      try {
+        deleteRecord(recordType, recordId);
+        log.audit({ title: 'Deleted record', details: { action, recordType, recordId } });
+        context.write({ key: 'deleted', value: '1' });
+      } catch (error) {
+        log.error({
+          title: 'Delete failure',
+          details: { action, recordType, recordId, errorName: error.name, errorMessage: error.message }
+        });
+        context.write({ key: 'failed', value: '1' });
+        if (config.stopOnError) {
+          throw error;
+        }
+      }
+      return;
+    }
+
+    log.error({ title: 'Skipped row: unsupported action value', details: { action, recordType, recordId } });
+    context.write({ key: 'skipped', value: '1' });
   };
 
   const reduce = (context) => {
@@ -419,6 +541,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   const summarize = (summary) => {
     const totals = {
       patched: 0,
+      created: 0,
+      deleted: 0,
       previewed: 0,
       failed: 0,
       skipped: 0,

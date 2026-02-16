@@ -43,6 +43,7 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
 | Page Size | `_th_dp_page_size` (final: `custscript_th_dp_page_size`) | Free-Form Text |
 | Alias Prefix | `_th_dp_alias_prefix` (final: `custscript_th_dp_alias_prefix`) | Free-Form Text |
 | Query Custom Script ID | `_th_dp_custom_script_id` (final: `custscript_th_dp_custom_script_id`) | Free-Form Text |
+| Enable Create/Delete Actions | `_th_dp_enable_actions` (final: `custscript_th_dp_enable_actions`) | Check Box |
 
 - For defaults, use:
   - Dry Run = checked
@@ -52,6 +53,7 @@ Use this path if you are a NetSuite admin installing directly in the account UI.
   - Page Size = `100`
   - Alias Prefix = `fieldid_`
   - Query Custom Script ID = `th_data_patcher`
+  - Enable Create/Delete Actions = unchecked
 
 4. Create first deployment.
 - Deployment script ID:

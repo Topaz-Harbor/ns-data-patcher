@@ -120,9 +120,56 @@ Recommended settings:
 - `Force Load + Save = false` (ignored for line updates because load/save is required)
 - `Stop On Error = true` for targeted fixes
 
+## Scenario 7: Create Task Records from Query Output
+
+Goal: create follow-up tasks for open support cases.
+
+```sql
+SELECT
+  'create' AS action,
+  'task' AS recordtype,
+  CONCAT('Case Follow-up: ', sc.title) AS fieldid_title,
+  sc.assigned AS fieldid_assigned,
+  sc.company AS fieldid_company,
+  CURRENT_DATE AS fieldid_startdate
+FROM supportcase sc
+WHERE sc.status = 'OPEN'
+  AND sc.assigned IS NOT NULL
+ORDER BY sc.id
+```
+
+Recommended settings:
+
+- `Enable Create/Delete Actions = true`
+- `Dry Run = true`, then `false`
+- `Stop On Error = false`
+
+## Scenario 8: Delete Cleanup Custom Records
+
+Goal: remove stale staging records after migration completion.
+
+```sql
+SELECT
+  'delete' AS action,
+  'customrecord_th_stage_row' AS recordtype,
+  cr.id AS recordid
+FROM customrecord_th_stage_row cr
+WHERE cr.custrecord_th_stage_status = 'COMPLETE'
+  AND cr.lastmodified < ADD_MONTHS(CURRENT_DATE, -3)
+ORDER BY cr.id
+```
+
+Recommended settings:
+
+- `Enable Create/Delete Actions = true`
+- `Dry Run = true`, then `false`
+- `Stop On Error = true` for high-risk deletes
+
 ## Query Construction Notes
 
 - Always include deterministic `ORDER BY`.
 - Always return `recordtype` and `recordid` aliases exactly.
+- Use `action` when running create/delete workflows.
 - Use `fieldid_` alias prefix for every update field.
+- Use `linefield_` alias prefix for line updates.
 - Keep result set to one row per target record whenever possible.

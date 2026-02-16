@@ -2,9 +2,13 @@
 
 ## What It Does
 
-Data Patcher runs a SuiteQL query and applies body-field updates to records returned by that query.
+Data Patcher runs a SuiteQL query and applies update/create/delete actions from query results.
 
-Current release supports header/body fields and sublist line updates.
+Current release supports:
+
+- body/header updates
+- sublist line updates
+- optional create/delete actions (when explicitly enabled)
 
 ## Job Model
 
@@ -21,13 +25,17 @@ Create one deployment per job so each remediation has clear ownership and logs.
 
 Your SuiteQL must return these columns:
 
-- `recordtype`
-- `recordid`
+- `recordtype` (required for all actions)
+- `recordid` (required for `update` and `delete`; not required for `create`)
 - update columns aliased as `fieldid_<fieldid>` for body fields
 - optional sublist columns aliased as `linefield_<fieldid>` for line fields
 - when using sublist aliases, include:
   - `sublistid`
   - one line locator: `lineindex` (0-based), `linenumber` (1-based), or `lineuniquekey`
+- optional `action` column:
+  - `update` (default if omitted)
+  - `create` (requires non-update actions enabled)
+  - `delete` (requires non-update actions enabled)
 
 Example:
 
@@ -54,6 +62,7 @@ ORDER BY t.id
 - `Page Size`: query page size for `runSuiteQLPaged` (script enforces 5 to 1000).
 - `Alias Prefix`: default `fieldid_`.
 - `Query Custom Script ID`: optional query diagnostic owner tag.
+- `Enable Create/Delete Actions`: required to allow `action=create` or `action=delete`.
 
 ## Runbook
 
@@ -71,6 +80,8 @@ Use default Inline Edit mode (`record.submitFields`) when possible because it is
 
 Use `Force Load + Save` only when update behavior requires full load/save semantics or when Inline Edit fails for unexplained edge-case behavior.
 
+Create/delete actions ignore Inline Edit mode and run through record create/delete APIs.
+
 ## Troubleshooting
 
 ### No records updated
@@ -87,9 +98,14 @@ Use `Force Load + Save` only when update behavior requires full load/save semant
 - Use `linefield_` aliases and include required locator columns.
 - Sublist updates always run in load/save mode; Inline Edit cannot update lines.
 
+### Create/delete rows are ignored
+- Confirm `Enable Create/Delete Actions` is checked on deployment.
+- Confirm `action` column values are exactly `create` or `delete`.
+
 ## Governance Notes
 
 - Inline Edit (`record.submitFields`) updates body fields only.
 - Sublist line updates require `record.load` + `record.save`.
+- Create/delete actions are deployment-gated by `Enable Create/Delete Actions`.
 - Ensure deterministic `ORDER BY` for paged SuiteQL.
 - For large remediations, use capped runs and staggered schedules.
