@@ -5,7 +5,7 @@ Use this path if you manage NetSuite code with SuiteCloud CLI.
 ## Prerequisites
 
 - Node.js and SuiteCloud CLI installed.
-- Auth ID configured for target account.
+- Authentication ID configured for target account.
 - Access to deploy scripts and objects.
 
 ## Project Location
@@ -24,17 +24,13 @@ This is the SDF project root (contains `suitecloud.config.js` and `src/`).
 git clone https://github.com/Topaz-Harbor/ns-data-patcher.git
 ```
 
-2. Move into the repository root.
+2. Move into the repository and SDF project root.
 
 ```bash
-cd ns-data-patcher
+cd ns-data-patcher/"Data Patcher"
 ```
 
-3. Move into the SDF project root.
-
-```bash
-cd "Data Patcher"
-```
+3. Run `suitecloud account:setup` and select your environment to deploy to.
 
 4. Validate project structure.
 
@@ -45,7 +41,7 @@ suitecloud project:validate
 5. Deploy project.
 
 ```bash
-suitecloud project:deploy
+suitecloud project:deploy --accountspecificvalues WARNING
 ```
 
 6. Confirm deployed objects.
@@ -74,7 +70,7 @@ suitecloud project:deploy
 suitecloud project:validate --log ./validation.log
 ```
 
-- Confirm auth ID and account target.
+- Re-run `suitecloud account:setup` if the account target is wrong.
 - Optionally run server validation:
 
 ```bash

@@ -647,10 +647,25 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       iteratorHolder.iterator().each((key, value) => callback(key, value));
     };
 
+    const handleStageError = (stageName, counterKey, stageSummary) => {
+      if (!stageSummary || !stageSummary.error) {
+        return;
+      }
+      totals[counterKey] += 1;
+      log.error({
+        title: `${stageName} stage error`,
+        details: stageSummary.error
+      });
+    };
+
     iterate(summary.output, (key, value) => {
       totals[key] = parseInt(value, 10) || 0;
       return true;
     });
+
+    handleStageError('Input', 'inputErrors', summary.inputSummary);
+    handleStageError('Map', 'mapErrors', summary.mapSummary);
+    handleStageError('Reduce', 'reduceErrors', summary.reduceSummary);
 
     iterate(summary.inputSummary && summary.inputSummary.errors, (key, error) => {
       totals.inputErrors += 1;
