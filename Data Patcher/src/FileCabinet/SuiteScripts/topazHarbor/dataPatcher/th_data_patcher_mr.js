@@ -277,6 +277,30 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     });
   };
 
+  const DATE_FIELD_TYPES = {
+    date: true,
+    datetime: true,
+    datetimetz: true
+  };
+
+  const getFieldType = (recordObj, fieldId) => {
+    try {
+      const fieldObj = recordObj.getField({ fieldId });
+      return fieldObj && fieldObj.type ? fieldObj.type.toString().toLowerCase() : '';
+    } catch (error) {
+      return '';
+    }
+  };
+
+  const tryParseDateValue = (value) => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
   const createRecord = (recordType, bodyValues) => {
     const createdRecord = record.create({
       type: recordType,
@@ -284,9 +308,36 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     });
 
     Object.keys(bodyValues).forEach((fieldId) => {
+      const rawValue = bodyValues[fieldId];
+      const fieldType = getFieldType(createdRecord, fieldId);
+      const isDateField = DATE_FIELD_TYPES[fieldType] === true;
+
+      if (isDateField && rawValue !== null && rawValue !== undefined && rawValue !== '') {
+        const parsedDate = tryParseDateValue(rawValue);
+
+        if (!parsedDate) {
+          log.error({
+            title: 'Unparseable date field for create',
+            details: {
+              recordType,
+              fieldId,
+              fieldType,
+              rawValue
+            }
+          });
+          throw Error(`Unable to parse date value for field ${fieldId}: ${rawValue}`);
+        }
+
+        createdRecord.setValue({
+          fieldId,
+          value: parsedDate
+        });
+        return;
+      }
+
       createdRecord.setValue({
         fieldId,
-        value: bodyValues[fieldId]
+        value: rawValue
       });
     });
 
@@ -516,7 +567,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
         }
 
         const newId = createRecord(recordType, bodyValues);
-        log.audit({ title: 'Created record', details: { action, recordType, newId, bodyFieldIds } });
+        log.audit({ title: 'Created record', details: { action, recordType, newId, bodyValues } });
         context.write({ key: 'created', value: '1' });
       } catch (error) {
         log.error({
