@@ -36,6 +36,8 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     return Number.isNaN(parsed) ? null : parsed;
   };
 
+  const normalizeSuiteQL = (suiteql) => suiteql.replace(/;+[\s\r\n]*$/, '');
+
   const getScriptIdentity = () => {
     const script = runtime.getCurrentScript();
     return {
@@ -49,8 +51,10 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
     const suiteql = script.getParameter({ name: PARAMS.suiteql });
     const customScriptIdRaw = script.getParameter({ name: PARAMS.customScriptId });
 
+    const normalizedSuiteQL = suiteql ? normalizeSuiteQL(suiteql.toString().trim()) : '';
+
     return {
-      suiteql: suiteql ? suiteql.toString().trim() : '',
+      suiteql: normalizedSuiteQL,
       forceLoadSave: toBoolean(script.getParameter({ name: PARAMS.forceLoadSave })),
       dryRun: toBoolean(script.getParameter({ name: PARAMS.dryRun })),
       stopOnError: toBoolean(script.getParameter({ name: PARAMS.stopOnError })),
@@ -113,18 +117,45 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
   };
 
   const inferColumnNames = (inputQuery, customScriptId) => {
-    const probeQuery = `SELECT * FROM (${inputQuery}) thdp_probe WHERE ROWNUM <= 1`;
-    const resultSet = query.runSuiteQL({
-      query: probeQuery,
-      customScriptId: customScriptId || undefined
-    });
-    const mappedRows = resultSet.asMappedResults();
+    try {
+      const pagedData = query.runSuiteQLPaged({
+        query: inputQuery,
+        pageSize: 1,
+        customScriptId: customScriptId || undefined
+      });
 
-    if (!mappedRows.length) {
-      return [];
+      let firstRow = null;
+      pagedData.iterator().each((dataPage) => {
+        dataPage.value.data.iterator().each((result) => {
+          firstRow = result.value.asMap();
+          return false;
+        });
+        return false;
+      });
+
+      if (!firstRow) {
+        return [];
+      }
+
+      return Object.keys(firstRow).map((columnName) => columnName.toLowerCase());
+    } catch (pagedError) {
+      log.debug({
+        title: "inferColumnNames() falling back to runSuiteQL",
+        details: pagedError.message
+      });
+
+      const resultSet = query.runSuiteQL({
+        query: inputQuery,
+        customScriptId: customScriptId || undefined
+      });
+      const mappedRows = resultSet.asMappedResults();
+
+      if (!mappedRows.length) {
+        return [];
+      }
+
+      return Object.keys(mappedRows[0]).map((columnName) => columnName.toLowerCase());
     }
-
-    return Object.keys(mappedRows[0]).map((columnName) => columnName.toLowerCase());
   };
 
   const saveColumnMetadata = (config, inputQuery, columnNames) => {
@@ -426,6 +457,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
             recordId,
             mode: effectiveMode,
             bodyFieldIds,
+            bodyValues,
             lineFieldIds,
             sublistId: '',
             lineIndex: ''
