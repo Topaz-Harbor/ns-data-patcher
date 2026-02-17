@@ -473,6 +473,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
             recordId,
             mode: effectiveMode,
             bodyFieldIds,
+            bodyValues,
             lineFieldIds,
             errorName: error.name,
             errorMessage: error.message
@@ -520,7 +521,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       } catch (error) {
         log.error({
           title: 'Create failure',
-          details: { action, recordType, bodyFieldIds, errorName: error.name, errorMessage: error.message }
+          details: { action, recordType, bodyFieldIds, bodyValues, errorName: error.name, errorMessage: error.message }
         });
         context.write({ key: 'failed', value: '1' });
         if (config.stopOnError) {
