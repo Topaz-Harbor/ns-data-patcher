@@ -113,7 +113,7 @@ define(['N/cache', 'N/log', 'N/query', 'N/record', 'N/runtime'], (cache, log, qu
       return config.suiteql;
     }
 
-    return `SELECT * FROM (${config.suiteql}) thdp_input WHERE ROWNUM <= ${config.maxRows}`;
+    return `SELECT DISTINCT * FROM (${config.suiteql}) thdp_input WHERE ROWNUM <= ${config.maxRows}`;
   };
 
   const inferColumnNames = (inputQuery, customScriptId) => {
