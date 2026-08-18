@@ -14,7 +14,7 @@
       <label>SuiteQL</label>
       <storevalue>T</storevalue>
       <description>SuiteQL query used by this deployment. Return recordtype plus aliases for body/sublist/action processing.</description>
-      <help>Required. Include deterministic ORDER BY. Use fieldid_&lt;fieldid&gt;, optional linefield_&lt;fieldid&gt;, and optional action column.</help>
+      <help>Required. Return recordtype and, for update/delete rows, recordid. Use fieldid_&lt;fieldid&gt; for body fields, linefield_&lt;fieldid&gt; plus sublistid and lineuniquekey for sublist updates, optional action values of update/create/delete, optional operationsequence for deferred ordering, and a deterministic ORDER BY.</help>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_force_loadsave">
       <accesslevel>2</accesslevel>
@@ -23,6 +23,7 @@
       <storevalue>T</storevalue>
       <defaultchecked>F</defaultchecked>
       <description>If checked, use record.load/record.save instead of submitFields.</description>
+      <help>Check when body-field updates must run through full record load/save instead of submitFields, such as fields with sourcing, validation, or inline-edit limits. Sublist updates already use load/save.</help>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_dry_run">
       <accesslevel>2</accesslevel>
@@ -31,6 +32,7 @@
       <storevalue>T</storevalue>
       <defaultchecked>T</defaultchecked>
       <description>If checked, no records are updated. Logs preview output only.</description>
+      <help>Recommended for first runs. Logs the action, record, and values that would be applied without creating, updating, or deleting anything.</help>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_stop_on_error">
       <accesslevel>2</accesslevel>
@@ -39,6 +41,7 @@
       <storevalue>T</storevalue>
       <defaultchecked>F</defaultchecked>
       <description>If checked, script exits immediately on first patch failure.</description>
+      <help>Check to stop after the first failed update, create, or delete. Earlier changes are not rolled back; remaining rows are skipped once the abort flag is set.</help>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_max_rows">
       <accesslevel>2</accesslevel>
@@ -47,6 +50,7 @@
       <storevalue>T</storevalue>
       <defaultvalue>0</defaultvalue>
       <description>Optional row cap. 0 means no explicit cap.</description>
+      <help>Optional safety cap on the input query. Set 0 for no cap, or use a small number for staged rollout, troubleshooting, or sample runs.</help>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_alias_prefix">
       <accesslevel>2</accesslevel>
@@ -55,6 +59,7 @@
       <storevalue>T</storevalue>
       <defaultvalue>fieldid_</defaultvalue>
       <description>Column alias prefix used to identify update fields.</description>
+      <help>Prefix used to identify body-field aliases in SuiteQL. With the default fieldid_, a column aliased as fieldid_memo updates the memo field.</help>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_custom_script_id">
       <accesslevel>2</accesslevel>
@@ -63,6 +68,7 @@
       <storevalue>T</storevalue>
       <defaultvalue>th_data_patcher</defaultvalue>
       <description>Optional query customScriptId used for query diagnostics.</description>
+      <help>Optional customScriptId passed into SuiteQL execution for query traceability and diagnostics. Change only if you need a different identifier in NetSuite query tooling.</help>
     </scriptcustomfield>
     <scriptcustomfield scriptid="custscript_th_dp_enable_actions">
       <accesslevel>2</accesslevel>
@@ -71,6 +77,7 @@
       <storevalue>T</storevalue>
       <defaultchecked>F</defaultchecked>
       <description>If checked, action=create and action=delete rows are allowed.</description>
+      <help>Check to allow rows with action values of create or delete. Leave unchecked to restrict this deployment to update actions only.</help>
     </scriptcustomfield>
   </scriptcustomfields>
   <scriptdeployments>
